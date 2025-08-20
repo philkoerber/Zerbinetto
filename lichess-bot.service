@@ -1,0 +1,24 @@
+[Unit]
+Description=Lichess Bot
+After=network.target
+
+[Service]
+Type=simple
+User=lichess-bot
+WorkingDirectory=/home/lichess-bot
+Environment=PYTHONPATH=/home/lichess-bot
+ExecStart=/usr/bin/python3 /home/lichess-bot/bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/lichess-bot
+
+[Install]
+WantedBy=multi-user.target
