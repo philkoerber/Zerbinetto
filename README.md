@@ -1,27 +1,72 @@
-# Lichess Bot
+<div align="center">
+  <img src="logo.svg" alt="Zerbinetto Bot Logo" width="200"/>
+  
+  # Zerbinetto - Lichess Chess Bot
+  
+  *A fully functional Lichess chess bot that accepts challenges and plays legal moves using proper chess logic.*
+</div>
 
-A minimal Lichess bot that accepts challenges and plays random legal moves.
+## ✨ Current Status: **FULLY WORKING** ✨
+
+**The bot is now completely functional and ready to play chess!** 🎉
+
+### What Works:
+- ✅ **Challenge Acceptance**: Automatically accepts all incoming challenges
+- ✅ **Legal Move Generation**: Uses `python-chess` library for proper chess logic  
+- ✅ **Complete Games**: Plays from opening to endgame
+- ✅ **Both Colors**: Works correctly as white or black
+- ✅ **Real-time Streaming**: Monitors games via Lichess API streams
+- ✅ **Turn Detection**: Accurately detects when it's the bot's turn to move
+- ✅ **Error Recovery**: Handles network issues and API errors gracefully
+- ✅ **Bot Flair**: Full support for BOT account upgrade
+
+### Recent Improvements:
+- 🔧 **Fixed Move Generation**: Now generates only legal moves in any position
+- 🔧 **Fixed Game Streaming**: Proper real-time game state monitoring  
+- 🔧 **Fixed Turn Logic**: Accurate detection of whose turn it is
+- 🔧 **Added Chess Engine**: Integrated python-chess for proper game logic
+- 🔧 **Enhanced Logging**: Comprehensive debugging and monitoring
 
 ## Features
 
-- Connects to Lichess using API token authentication
-- Automatically accepts all incoming challenges
-- Plays random legal moves until the game ends
-- Logs basic information (challenges, moves, game results)
-- Simple start/stop functionality
+- **Proper Chess Logic**: Uses the `python-chess` library for legal move generation
+- **Real-time Game Streaming**: Monitors games via Lichess API streams
+- **Robust Move Generation**: Only generates and attempts legal moves
+- **Automatic Challenge Acceptance**: Accepts all incoming challenges
+- **Complete Game Flow**: Handles games from start to finish
+- **Bot Account Support**: Full support for BOT flair accounts
+- **Comprehensive Logging**: Detailed logs for debugging and monitoring
+- **Error Recovery**: Fallback mechanisms for network issues
 
 ## Prerequisites
 
 - Python 3.8 or higher
 - A Lichess account with API token
+- **For Bot Flair**: A separate bot account (see Bot Setup section below)
 
 ## Setup
 
 ### 1. Get a Lichess API Token
 
+#### Option A: Regular Account (No Bot Flair)
 1. Go to [Lichess Settings](https://lichess.org/account/oauth/token)
 2. Create a new personal API access token
 3. Copy the token (you'll need it for the next step)
+
+#### Option B: Bot Account (With Bot Flair) - **Recommended**
+1. Create a new Lichess account (don't play any games on it)
+2. Go to [lichess.org/api](https://lichess.org/api) → BOT → "Upgrade BOT account"
+3. Create a personal API token with all permissions checked
+4. Copy the token and add it to your `.env` file
+5. Run the bot upgrade script:
+   ```bash
+   # Using Python script
+   python upgrade_to_bot.py
+   
+   # Or using shell script
+   ./upgrade_to_bot.sh
+   ```
+6. Your account will now have "BOT" in front of the username
 
 ### 2. Install Dependencies
 
@@ -98,10 +143,11 @@ python bot.py
 ```
 
 The bot will:
-- Connect to Lichess
-- Accept all incoming challenges
-- Play random legal moves
-- Log activities to the console
+- Connect to Lichess event stream
+- Accept all incoming challenges automatically  
+- Play legal chess moves using proper game logic
+- Monitor active games in real-time
+- Log detailed activities to the console
 
 ### Production Deployment
 
@@ -140,14 +186,53 @@ python bot.py
 nohup python bot.py > bot.log 2>&1 &
 ```
 
+## Bot Setup (Getting Bot Flair)
+
+### Quick Bot Upgrade
+
+To get the bot flair (BOT prefix on your username), use the included upgrade scripts:
+
+```bash
+# Method 1: Python script (recommended)
+python upgrade_to_bot.py
+
+# Method 2: Shell script
+./upgrade_to_bot.sh
+
+# Verify bot status
+python upgrade_to_bot.py verify
+```
+
+### Manual Bot Upgrade
+
+If you prefer to do it manually:
+
+1. Create a new Lichess account (don't play any games)
+2. Go to [lichess.org/api](https://lichess.org/api) → BOT → "Upgrade BOT account"
+3. Create a personal API token with all permissions checked
+4. Add the token to your `.env` file
+5. Run this curl command:
+   ```bash
+   curl -d '' lichess.org/api/bot/account/upgrade -H "Authorization: Bearer YOUR_TOKEN_HERE"
+   ```
+
+### Bot Account Best Practices
+
+- **Separate Account**: Use a different account for your bot (not your main account)
+- **No Games**: Don't play any games on the bot account before upgrading
+- **Clear Username**: Choose a username that indicates it's a bot
+- **Proper Identification**: The bot code includes proper User-Agent headers
+
 ## Project Structure
 
 ```
 lichess-bot/
-├── bot.py              # Main bot script
-├── lichess_client.py   # Lichess API client
-├── game_handler.py     # Game logic and move generation
-├── requirements.txt    # Python dependencies
+├── bot.py              # Main bot script and event loop
+├── lichess_client.py   # Lichess API client (REST + streaming)
+├── game_handler.py     # Chess game logic and legal move generation
+├── upgrade_to_bot.py   # Bot account upgrade script
+├── upgrade_to_bot.sh   # Bot upgrade shell script
+├── requirements.txt    # Python dependencies (includes python-chess)
 ├── env.example         # Environment variables template
 ├── start_bot.sh        # Quick start script
 ├── deploy.sh           # Deployment script
@@ -167,12 +252,14 @@ The bot can be configured by modifying the constants in `bot.py`:
 
 ## Logging
 
-The bot logs the following information:
-- Connection status
-- Challenges received and accepted
-- Games started/ended
-- Moves made
-- Errors and exceptions
+The bot provides comprehensive logging including:
+- **Connection Status**: Stream connections and disconnections
+- **Challenge Handling**: Challenges received, accepted, and declined
+- **Game Events**: Game starts, finishes, and state updates
+- **Move Generation**: Legal moves found and selected
+- **Chess Logic**: FEN positions, move validation, and board states
+- **Error Handling**: Network issues, API errors, and recovery attempts
+- **Performance**: Move timing and game monitoring status
 
 Logs are written to the console by default. For production, consider redirecting to a log file.
 
@@ -202,9 +289,17 @@ python bot.py --debug
 
 The bot is designed to be easily extensible:
 
-- `lichess_client.py`: Handle Lichess API communication
-- `game_handler.py`: Implement chess logic and move generation
-- `bot.py`: Main bot loop and coordination
+- **`lichess_client.py`**: Handles all Lichess API communication (REST + streaming)
+- **`game_handler.py`**: Implements chess game logic and legal move generation using python-chess
+- **`bot.py`**: Main bot event loop and coordination between components
+
+### Current Architecture
+
+- **Event-Driven**: Uses Lichess event streams for real-time updates
+- **Asynchronous**: Built with asyncio for concurrent game handling  
+- **Chess Engine**: Integrates python-chess library for proper game logic
+- **Robust**: Includes error handling and fallback mechanisms
+- **Modular**: Clean separation between API, game logic, and coordination
 
 ### Testing
 
@@ -224,10 +319,21 @@ This will check:
 
 #### Test the Bot
 
-For testing, you can:
+The bot has been thoroughly tested and is working correctly:
+
+**✅ Verified Working Features:**
+- Challenge acceptance from any user
+- Legal move generation in all positions
+- Complete game flow (start to finish)  
+- Both white and black piece handling
+- Real-time game state monitoring
+- Proper turn detection and move timing
+
+**For your own testing:**
 1. Create a test Lichess account
-2. Use a different API token
+2. Use a different API token  
 3. Challenge the bot from your main account
+4. The bot will accept and play a complete game
 
 ## License
 
