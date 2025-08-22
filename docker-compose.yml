@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  lichess-bot:
+    build: .
+    container_name: zerbinetto-bot
+    environment:
+      - LICHESS_TOKEN=${LICHESS_TOKEN}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      # Mount logs directory for easy access
+      - ./logs:/app/logs
+    # For development, you can override the command
+    # command: ["python", "src/bot.py", "--debug"]
+    
+  # Development service with debug mode
+  lichess-bot-dev:
+    build: .
+    container_name: zerbinetto-bot-dev
+    environment:
+      - LICHESS_TOKEN=${LICHESS_TOKEN}
+    restart: "no"  # Don't auto-restart in dev mode
+    volumes:
+      # Mount source code for development
+      - .:/app
+      - ./logs:/app/logs
+    command: ["python", "src/bot.py", "--debug"]
+    profiles:
+      - dev
