@@ -14,6 +14,9 @@ import aiohttp
 import chess
 import chess.engine
 
+from zerbinetto_engine import ZerbinettoEngine
+from zerbinetto_config import SEARCH_DEPTH, RANDOMNESS_FACTOR, ENGINE_SETTINGS
+
 logger = logging.getLogger(__name__)
 
 class GameHandler:
@@ -29,9 +32,12 @@ class GameHandler:
         self.active_games: Dict[str, Dict] = {}
         self.game_tasks: Dict[str, asyncio.Task] = {}
         
+        # Initialize Zerbinetto engine
+        self.zerbinetto_engine = ZerbinettoEngine(search_depth=SEARCH_DEPTH, randomness_factor=RANDOMNESS_FACTOR)
+        
         # Configuration
-        self.move_delay = 1.0  # Delay before making a move (seconds)
-        self.max_move_time = 10.0  # Maximum time to think about a move (seconds)
+        self.move_delay = ENGINE_SETTINGS['move_delay']
+        self.max_move_time = ENGINE_SETTINGS['max_move_time']
     
     async def handle_game_start(self, game_data: Dict):
         """Handle when a game starts.
@@ -66,7 +72,7 @@ class GameHandler:
             logger.info(f"It's our turn to move first in game {game_id}")
             # Make a move immediately
             await asyncio.sleep(1.0)  # Small delay
-            move = await self._generate_random_move(game_data)
+            move = await self._generate_zerbinetto_move(game_data)
             if move:
                 logger.info(f"Making first move {move} in game {game_id}")
                 await self.lichess_client.make_move(game_id, move)
@@ -93,7 +99,7 @@ class GameHandler:
         for attempt in range(max_retries):
             try:
                 # Generate a legal move
-                move = await self._generate_random_move(game_data)
+                move = await self._generate_zerbinetto_move(game_data)
                 if not move:
                     logger.warning(f"No legal move generated on attempt {attempt + 1}")
                     continue
@@ -422,9 +428,9 @@ class GameHandler:
             # Add a small delay to avoid making moves too quickly
             await asyncio.sleep(self.move_delay)
             
-            # Generate a random legal move
-            logger.info(f"Generating random move for game {game_id}")
-            move = await self._generate_random_move(game_data)
+            # Generate a Zerbinetto-style move
+            logger.info(f"Generating Zerbinetto-style move for game {game_id}")
+            move = await self._generate_zerbinetto_move(game_data)
             
             if move:
                 logger.info(f"Generated move {move} for game {game_id}, sending to Lichess...")
@@ -436,8 +442,8 @@ class GameHandler:
         except Exception as e:
             logger.error(f"Error making move in game {game_id}: {e}", exc_info=True)
     
-    async def _generate_random_move(self, game_data: Dict) -> Optional[str]:
-        """Generate a random legal move using proper chess logic.
+    async def _generate_zerbinetto_move(self, game_data: Dict) -> Optional[str]:
+        """Generate a Zerbinetto-style tactical move using the Zerbinetto engine.
         
         Args:
             game_data: Current game state
@@ -445,7 +451,7 @@ class GameHandler:
         Returns:
             A legal move in UCI format, or None if no moves available
         """
-        logger.info("Generating random legal move...")
+        logger.info("Generating Zerbinetto-style tactical move...")
         
         # Get the current FEN position - handle both direct and nested game data
         fen = game_data.get('fen', '')
@@ -483,26 +489,84 @@ class GameHandler:
             # Create a chess board from the FEN position
             board = chess.Board(fen)
             
-            # Get all legal moves
+            # Check if we need to adjust for our color
+            game_id = game_data.get('id') or game_data.get('game', {}).get('id')
+            if game_id and game_id in self.active_games:
+                our_color = self.active_games[game_id].get('our_color')
+                if our_color == 'black':
+                    # If we're black, we need to flip the board perspective
+                    # The Tal engine evaluates from white's perspective
+                    pass  # The engine will handle this automatically
+            
+            # Get the best move from Zerbinetto engine
+            best_move = self.zerbinetto_engine.get_best_move(board, time_limit=self.max_move_time)
+            
+            if best_move:
+                move_uci = best_move.uci()
+                logger.info(f"Zerbinetto engine selected move: {move_uci}")
+                return move_uci
+            else:
+                logger.warning("Zerbinetto engine returned no move")
+                return None
+            
+        except Exception as e:
+            logger.error(f"Error generating Zerbinetto move: {e}", exc_info=True)
+            # Fallback to random move if Zerbinetto engine fails
+            logger.info("Falling back to random move due to Zerbinetto engine error")
+            return await self._generate_random_move_fallback(game_data)
+    
+    async def _generate_random_move_fallback(self, game_data: Dict) -> Optional[str]:
+        """Fallback method to generate a random legal move.
+        
+        Args:
+            game_data: Current game state
+            
+        Returns:
+            A legal move in UCI format, or None if no moves available
+        """
+        logger.info("Generating random legal move (fallback)...")
+        
+        # Get the current FEN position
+        fen = game_data.get('fen', '')
+        if not fen:
+            fen = game_data.get('game', {}).get('fen', '')
+        
+        # If no FEN provided, try to build it from moves
+        if not fen:
+            moves = game_data.get('moves', '')
+            if not moves:
+                moves = game_data.get('state', {}).get('moves', '')
+            
+            if moves:
+                try:
+                    board = chess.Board()
+                    move_list = moves.split()
+                    for move_uci in move_list:
+                        move = chess.Move.from_uci(move_uci)
+                        board.push(move)
+                    fen = board.fen()
+                except Exception as e:
+                    logger.error(f"Error building FEN from moves: {e}")
+                    return None
+            else:
+                logger.warning("No FEN position or moves provided")
+                return None
+        
+        try:
+            board = chess.Board(fen)
             legal_moves = list(board.legal_moves)
             
             if not legal_moves:
                 logger.warning("No legal moves available")
                 return None
             
-            logger.info(f"Found {len(legal_moves)} legal moves")
+            selected_move = random.choice(legal_moves)
+            logger.info(f"Selected random fallback move: {selected_move.uci()}")
             
-            # Convert chess.Move objects to UCI format strings
-            legal_moves_uci = [move.uci() for move in legal_moves]
-            
-            # Randomly select a legal move
-            selected_move = random.choice(legal_moves_uci)
-            logger.info(f"Selected legal move: {selected_move}")
-            
-            return selected_move
+            return selected_move.uci()
             
         except Exception as e:
-            logger.error(f"Error generating legal move: {e}", exc_info=True)
+            logger.error(f"Error generating fallback move: {e}", exc_info=True)
             return None
     
     def get_active_games(self) -> List[str]:
