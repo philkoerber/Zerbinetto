@@ -46,8 +46,8 @@ docker-compose.yml
 # Service files
 config/
 
-# Shell scripts (not needed in container)
-scripts/
+# Shell scripts (needed for deployment)
+# scripts/
 
 # Test files (optional - remove if you want to include them)
 test_*.py

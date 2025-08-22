@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source files
 COPY src/ ./src/
 
-# Copy scripts
-COPY scripts/ ./scripts/
+# Copy scripts (not needed in container, but keeping for reference)
+# COPY scripts/ ./scripts/
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash botuser && \
