@@ -90,3 +90,4 @@ The bot uses environment variables for configuration:
 # Testing with Lichess token configured
 # Testing deployment without root check
 # Testing with updated deployment script
+# Testing webhook security
