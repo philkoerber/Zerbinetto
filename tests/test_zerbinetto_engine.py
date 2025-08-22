@@ -84,6 +84,60 @@ def test_king_attack_position():
     
     return best_move
 
+def test_sacrifice_temptation():
+    """Test the engine with a position where it might be tempted to sacrifice unsoundly."""
+    print("\nTesting sacrifice temptation position...")
+    
+    # Position where a knight sacrifice looks tempting but is unsound
+    fen = "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 1"
+    board = chess.Board(fen)
+    engine = ZerbinettoEngine(search_depth=3, randomness_factor=0.1)
+    
+    print(f"FEN: {board.fen()}")
+    print(f"Legal moves: {len(list(board.legal_moves))}")
+    
+    best_move = engine.get_best_move(board)
+    print(f"Best move: {best_move.uci()}")
+    print(f"Move name: {board.san(best_move)}")
+    
+    return best_move
+
+def test_middlegame_position():
+    """Test the engine with a typical middlegame position."""
+    print("\nTesting middlegame position...")
+    
+    # A typical middlegame position
+    fen = "r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 0 1"
+    board = chess.Board(fen)
+    engine = ZerbinettoEngine(search_depth=3, randomness_factor=0.1)
+    
+    print(f"FEN: {board.fen()}")
+    print(f"Legal moves: {len(list(board.legal_moves))}")
+    
+    best_move = engine.get_best_move(board)
+    print(f"Best move: {best_move.uci()}")
+    print(f"Move name: {board.san(best_move)}")
+    
+    return best_move
+
+def test_endgame_position():
+    """Test the engine with an endgame position."""
+    print("\nTesting endgame position...")
+    
+    # A simple endgame position
+    fen = "8/8/8/8/8/8/4K3/4k3 w - - 0 1"
+    board = chess.Board(fen)
+    engine = ZerbinettoEngine(search_depth=3, randomness_factor=0.1)
+    
+    print(f"FEN: {board.fen()}")
+    print(f"Legal moves: {len(list(board.legal_moves))}")
+    
+    best_move = engine.get_best_move(board)
+    print(f"Best move: {best_move.uci()}")
+    print(f"Move name: {board.san(best_move)}")
+    
+    return best_move
+
 def main():
     """Run all tests."""
     print("Testing Zerbinetto Engine")
@@ -94,6 +148,9 @@ def main():
         test_tactical_position()
         test_sacrificial_position()
         test_king_attack_position()
+        test_sacrifice_temptation()
+        test_middlegame_position()
+        test_endgame_position()
         
         print("\n" + "=" * 50)
         print("All tests completed successfully!")

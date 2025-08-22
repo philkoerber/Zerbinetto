@@ -5,17 +5,17 @@ Configuration parameters for the Zerbinetto chess engine.
 """
 
 # Search parameters
-SEARCH_DEPTH = 3  # Depth for minimax search (3-4 plies recommended)
+SEARCH_DEPTH = 4  # Depth for minimax search (balanced for strength vs speed)
 RANDOMNESS_FACTOR = 0.15  # Factor for move randomization (0.0-1.0)
 
 # Tactical bias weights (in pawns)
 BIAS_WEIGHTS = {
-    'sacrifice': 0.3,           # Bonus for sacrifices
-    'open_lines': 0.15,         # Bonus for opening lines
-    'king_attack': 0.25,        # Bonus for king attacks
-    'imbalance': 0.2,           # Bonus for imbalanced positions
-    'simplification': -0.1,     # Penalty for simplifying
-    'own_king_exposure': -0.05, # Small penalty for own king exposure
+    'sacrifice': 0.05,          # Small bonus for sacrifices (reduced from 0.3)
+    'open_lines': 0.08,         # Bonus for opening lines (reduced from 0.15)
+    'king_attack': 0.12,        # Bonus for king attacks (reduced from 0.25)
+    'imbalance': 0.1,           # Bonus for imbalanced positions (reduced from 0.2)
+    'simplification': -0.05,    # Penalty for simplifying (reduced from -0.1)
+    'own_king_exposure': -0.1,  # Increased penalty for own king exposure
 }
 
 # Piece values for basic evaluation
@@ -36,7 +36,7 @@ POSITION_WEIGHTS = {
 
 # Engine behavior settings
 ENGINE_SETTINGS = {
-    'max_move_time': 10.0,      # Maximum time to think about a move (seconds)
+    'max_move_time': 8.0,       # Maximum time to think about a move (seconds) - reasonable for online play
     'move_delay': 1.0,          # Delay before making a move (seconds)
     'enable_debug_logging': True,  # Enable detailed move evaluation logging
 }

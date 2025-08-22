@@ -142,6 +142,10 @@ class ZerbinettoEngine:
         # Apply tactical bonus to score
         final_score = base_score + tactical_bonus
         
+        # Apply blunder penalty (heavily penalize obvious blunders)
+        if self._is_blunder(board, move):
+            final_score -= 5.0  # Heavy penalty for blunders
+        
         return MoveEvaluation(
             move=move,
             score=final_score,
@@ -278,9 +282,49 @@ class ZerbinettoEngine:
         
         # If we're losing material, it might be a sacrifice
         if material_after < material_before:
+            # Only consider it a sacrifice if we're not losing too much material
+            material_loss = material_before - material_after
+            
+            # Don't sacrifice more than a piece (3.2 pawns) unless we have a clear advantage
+            if material_loss > 3.2:
+                return False
+            
             # Check if we gain tactical opportunities
             if self._has_tactical_opportunities(board_copy):
+                # Additional check: make sure we're not just hanging a piece
+                if not self._is_blunder(board, move):
+                    return True
+        
+        return False
+    
+    def _is_blunder(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move is a blunder (losing material without compensation).
+        
+        Args:
+            board: Current position
+            move: Move to check
+            
+        Returns:
+            True if the move is a blunder
+        """
+        # Make the move
+        board_copy = board.copy()
+        board_copy.push(move)
+        
+        # Check if the opponent can immediately win material
+        for opponent_move in board_copy.legal_moves:
+            board_copy.push(opponent_move)
+            
+            # Check if this gives the opponent a material advantage
+            material_after_opponent = self._count_material(board_copy)
+            material_before_move = self._count_material(board)
+            
+            # If opponent gains more than 1 pawn advantage, it's likely a blunder
+            if material_after_opponent < material_before_move - 1.0:
+                board_copy.pop()
                 return True
+            
+            board_copy.pop()
         
         return False
     
@@ -313,15 +357,56 @@ class ZerbinettoEngine:
         Returns:
             True if there are tactical opportunities
         """
-        # Check for checks, captures, or attacks on enemy king
+        # Check for checks
         if board.is_check():
             return True
         
         # Check for moves that attack the enemy king
         enemy_king = board.king(not board.turn)
         if enemy_king is not None:
+            # Count how many pieces attack the enemy king
+            king_attacks = 0
             for move in board.legal_moves:
                 if move.to_square == enemy_king or self._attacks_square(board, move, enemy_king):
+                    king_attacks += 1
+            
+            # Only consider it tactical if we have multiple attacking options
+            if king_attacks >= 2:
+                return True
+        
+        # Check for discovered attacks or pins
+        for move in board.legal_moves:
+            if self._creates_discovered_attack(board, move):
+                return True
+        
+        return False
+    
+    def _creates_discovered_attack(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move creates a discovered attack.
+        
+        Args:
+            board: Current position
+            move: Move to check
+            
+        Returns:
+            True if the move creates a discovered attack
+        """
+        # This is a simplified check - in a real implementation you'd want more sophisticated logic
+        board_copy = board.copy()
+        board_copy.push(move)
+        
+        # Check if we can attack the enemy king or queen after the move
+        enemy_king = board_copy.king(not board_copy.turn)
+        enemy_queen = board_copy.queens(not board_copy.turn)
+        
+        if enemy_king:
+            for attack_move in board_copy.legal_moves:
+                if attack_move.to_square == enemy_king:
+                    return True
+        
+        if enemy_queen:
+            for attack_move in board_copy.legal_moves:
+                if attack_move.to_square in enemy_queen:
                     return True
         
         return False
