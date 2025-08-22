@@ -85,3 +85,4 @@ The bot uses environment variables for configuration:
 - **Scalable**: Docker containers for easy scaling
 - **Automated**: GitHub webhooks for continuous deployment
 # Testing centralized webhook
+# Clean architecture - centralized webhook
