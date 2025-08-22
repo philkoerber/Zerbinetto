@@ -87,3 +87,4 @@ The bot uses environment variables for configuration:
 # Testing centralized webhook
 # Clean architecture - centralized webhook
 # Testing centralized webhook after cleanup
+# Testing with Lichess token configured
