@@ -141,7 +141,7 @@ ENGINE_SETTINGS = {
     'max_move_time': 8.0,       # Maximum time to think about a move (seconds) - reasonable for online play
     'move_delay': 1.0,          # Delay before making a move (seconds)
     'enable_debug_logging': True,  # Enable detailed move evaluation logging
-    'quiescence_depth': 3,      # Depth for quiescence search
+    'quiescence_depth': 5,      # Depth for quiescence search
     'transposition_table_size': 10000,  # Size of transposition table
 }
 
