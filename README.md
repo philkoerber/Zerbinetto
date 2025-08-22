@@ -62,6 +62,7 @@ Zerbinetto/
 │   └── zerbinetto_config.py # Engine configuration
 ├── tests/                 # Test suite
 │   ├── combined_engine_test.py # Comprehensive engine tests
+│   ├── test_enhanced_engine.py # Enhanced engine feature tests
 │   ├── test_zerbinetto_engine.py # Basic move quality tests
 │   └── timing_test.py     # Performance timing tests
 ├── scripts/               # Deployment scripts
@@ -75,10 +76,12 @@ Zerbinetto/
 
 Zerbinetto uses a custom chess engine inspired by Mikhail Tal's tactical style:
 
-- **Search Algorithm**: Minimax with alpha-beta pruning (4 ply depth)
+- **Search Algorithm**: Minimax with alpha-beta pruning, move ordering, quiescence search
+- **Positional Heuristics**: Piece-square tables, king safety, pawn structure, mobility
 - **Playing Style**: Aggressive, tactical, sacrificial when sound
+- **Tal Mode**: 15% chance per game for extra flashy, sacrificial play
 - **Strength**: Targets ~2100 Elo rating
-- **Features**: Bias towards king attacks, open lines, and imbalanced positions
+- **Performance**: 4 ply depth, ~1-3 seconds per move, transposition table caching
 - **Configuration**: Adjustable parameters in `src/zerbinetto_config.py`
 
 ### Testing the Engine
@@ -91,6 +94,9 @@ source venv/bin/activate
 
 # Run comprehensive tests
 python tests/combined_engine_test.py
+
+# Run enhanced engine feature tests
+python tests/test_enhanced_engine.py
 
 # Run basic move tests
 python tests/test_zerbinetto_engine.py
