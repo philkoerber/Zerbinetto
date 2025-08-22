@@ -86,3 +86,4 @@ The bot uses environment variables for configuration:
 - **Automated**: GitHub webhooks for continuous deployment
 # Testing centralized webhook
 # Clean architecture - centralized webhook
+# Testing centralized webhook after cleanup
