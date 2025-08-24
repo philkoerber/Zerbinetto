@@ -195,9 +195,10 @@ check_training_status() {
     print_status "Checking training status..."
     cd "$PROJECT_DIR"
     
-    # Check if training process is running
-    if docker exec zerbinetto-bot ps aux | grep -q "trainer"; then
-        print_success "Training process is running"
+    # Check if training process is running (using grep on logs since ps is not available in slim container)
+    recent_training_activity=$(docker exec zerbinetto-bot tail -50 /app/training.log 2>/dev/null | grep "ML Engine selected move" | wc -l)
+    if [ "$recent_training_activity" -gt 10 ]; then
+        print_success "Training process is running (${recent_training_activity} recent moves)"
     else
         print_warning "Training process is not running"
     fi
@@ -236,8 +237,9 @@ check_system_status() {
     
     # Check training status
     print_status "3. Training Status:"
-    if docker exec zerbinetto-bot ps aux | grep -q "trainer"; then
-        print_success "Training process is running"
+    recent_training_activity=$(docker exec zerbinetto-bot tail -50 /app/training.log 2>/dev/null | grep "ML Engine selected move" | wc -l)
+    if [ "$recent_training_activity" -gt 10 ]; then
+        print_success "Training process is running (${recent_training_activity} recent moves)"
     else
         print_warning "Training process is not running"
     fi
