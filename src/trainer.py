@@ -215,31 +215,51 @@ class SelfPlayTrainer:
         
         logger.info("Training iteration completed")
     
-    def continuous_training(self, iterations: int = 100, save_interval: int = 10):
+    def continuous_training(self, iterations: int = 100, save_interval: int = 10, forever: bool = False):
         """Run continuous training for multiple iterations.
         
         Args:
             iterations: Number of training iterations to run
             save_interval: Save model every N iterations
+            forever: If True, run indefinitely
         """
-        logger.info(f"Starting continuous training for {iterations} iterations")
-        
-        for iteration in range(iterations):
-            logger.info(f"Training iteration {iteration + 1}/{iterations}")
+        if forever:
+            logger.info("Starting continuous training (running indefinitely)")
+            iteration = 0
+            while True:
+                iteration += 1
+                logger.info(f"Training iteration {iteration}")
+                
+                # Perform training iteration
+                self.train_iteration()
+                
+                # Save model periodically
+                if iteration % save_interval == 0:
+                    backup_path = f"{self.model_path}.backup"
+                    self.engine.save_model(backup_path)
+                    logger.info(f"Model backup saved to {backup_path}")
+                
+                # Small delay between iterations
+                time.sleep(1)
+        else:
+            logger.info(f"Starting continuous training for {iterations} iterations")
             
-            # Perform training iteration
-            self.train_iteration()
+            for iteration in range(iterations):
+                logger.info(f"Training iteration {iteration + 1}/{iterations}")
+                
+                # Perform training iteration
+                self.train_iteration()
+                
+                # Save model periodically
+                if (iteration + 1) % save_interval == 0:
+                    backup_path = f"{self.model_path}.backup"
+                    self.engine.save_model(backup_path)
+                    logger.info(f"Model backup saved to {backup_path}")
+                
+                # Small delay between iterations
+                time.sleep(1)
             
-            # Save model periodically
-            if (iteration + 1) % save_interval == 0:
-                backup_path = f"{self.model_path}.backup"
-                self.engine.save_model(backup_path)
-                logger.info(f"Model backup saved to {backup_path}")
-            
-            # Small delay between iterations
-            time.sleep(1)
-        
-        logger.info("Continuous training completed")
+            logger.info("Continuous training completed")
 
 def main():
     """Main training function."""
@@ -250,6 +270,7 @@ def main():
     parser.add_argument('--games-per-iteration', type=int, default=50, help='Games per iteration')
     parser.add_argument('--model-path', default='models/chess_model.pkl', help='Model file path')
     parser.add_argument('--continuous', action='store_true', help='Run continuous training')
+    parser.add_argument('--forever', action='store_true', help='Run training indefinitely')
     
     args = parser.parse_args()
     
@@ -265,7 +286,10 @@ def main():
     
     if args.continuous:
         # Run continuous training
-        trainer.continuous_training(args.iterations)
+        if args.forever:
+            trainer.continuous_training(forever=True)
+        else:
+            trainer.continuous_training(args.iterations)
     else:
         # Run single training iteration
         trainer.train_iteration()

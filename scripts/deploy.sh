@@ -120,7 +120,8 @@ start_training() {
     fix_model_permissions
     
     # Start training in background inside the Docker container with logging
-    docker exec -d zerbinetto-bot bash -c "python -m src.trainer --continuous --iterations 1000 --games-per-iteration 50 > /app/training.log 2>&1"
+    # Run training indefinitely
+    docker exec -d zerbinetto-bot bash -c "python -m src.trainer --continuous --forever --games-per-iteration 50 > /app/training.log 2>&1"
     
     print_success "Continuous training started in background with logging to training.log"
 }
