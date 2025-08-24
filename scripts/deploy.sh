@@ -91,7 +91,23 @@ build_and_start() {
     # Start the application
     docker-compose up -d
     
+    # Fix model permissions after container starts
+    fix_model_permissions
+    
     print_success "Application built and started successfully"
+}
+
+# Function to fix model permissions
+fix_model_permissions() {
+    print_status "Fixing model file permissions..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Fix permissions for the model file so the bot can write to it
+    sudo chown 1000:1000 models/chess_model.pkl 2>/dev/null || true
+    sudo chmod 644 models/chess_model.pkl 2>/dev/null || true
+    
+    print_success "Model permissions fixed"
 }
 
 # Function to start continuous training
@@ -99,6 +115,9 @@ start_training() {
     print_status "Starting continuous training..."
     
     cd "$PROJECT_DIR"
+    
+    # Fix permissions first
+    fix_model_permissions
     
     # Start training in background inside the Docker container with logging
     docker exec -d zerbinetto-bot bash -c "python -m src.trainer --continuous --iterations 1000 --games-per-iteration 50 > /app/training.log 2>&1"
