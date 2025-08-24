@@ -14,7 +14,7 @@ import aiohttp
 import chess
 import chess.engine
 
-from .ml_engine import MLEngine
+from ml_engine import MLEngine
 
 logger = logging.getLogger(__name__)
 

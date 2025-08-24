@@ -212,7 +212,7 @@ class MLEngine:
         
         # Initialize MCTS wrapper if requested
         if self.use_mcts:
-            from .mcts_wrapper import MCTSWrapper
+            from mcts_wrapper import MCTSWrapper
             self.mcts_wrapper = MCTSWrapper(self, iterations=500, time_limit=3.0)
     
     def _load_model(self):

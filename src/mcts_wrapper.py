@@ -14,7 +14,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 
-from .ml_engine import MLEngine
+from ml_engine import MLEngine
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ import time
 from typing import List, Tuple, Optional
 from pathlib import Path
 
-from .ml_engine import MLEngine, ChessPositionEncoder
+from ml_engine import MLEngine, ChessPositionEncoder
 
 logger = logging.getLogger(__name__)
 
