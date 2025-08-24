@@ -17,8 +17,6 @@ services:
       - ./logs:/app/logs
       # Mount models directory for persistent model storage
       - ./models:/app/models
-      # Mount training log for monitoring
-      - ./training.log:/app/training.log
     # For development, you can override the command
     # command: ["python", "src/bot.py", "--debug"]
     
@@ -35,8 +33,6 @@ services:
       - ./logs:/app/logs
       # Mount models directory for persistent model storage
       - ./models:/app/models
-      # Mount training log for monitoring
-      - ./training.log:/app/training.log
     command: ["python", "src/bot.py", "--debug"]
     profiles:
       - dev

@@ -167,11 +167,7 @@ show_deploy_log() {
 show_training_log() {
     print_status "Showing training log..."
     cd "$PROJECT_DIR"
-    if [ -f "training.log" ]; then
-        tail -f training.log
-    else
-        print_warning "Training log not found. Training may not be running."
-    fi
+    docker exec zerbinetto-bot tail -f /app/training.log 2>/dev/null || print_warning "Training log not found. Training may not be running."
 }
 
 # Function to check training status
@@ -187,12 +183,8 @@ check_training_status() {
     fi
     
     # Show recent training log entries
-    if [ -f "training.log" ]; then
-        print_status "Recent training log entries:"
-        tail -10 training.log
-    else
-        print_warning "No training log found"
-    fi
+    print_status "Recent training log entries:"
+    docker exec zerbinetto-bot tail -10 /app/training.log 2>/dev/null || print_warning "No training log found"
 }
 
 # Function to show help
