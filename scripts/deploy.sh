@@ -195,7 +195,7 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  deploy      Full deployment (pull, cleanup, build, start, train)"
-    echo "  update      Pull updates and restart (triggered by webhook)"
+    echo "  update      Pull updates and restart with training (triggered by webhook)"
     echo "  restart     Restart the application"
     echo "  train       Start continuous training"
     echo "  stop        Stop the application"
@@ -245,6 +245,7 @@ update() {
     
     if check_health; then
         print_success "Update completed successfully!"
+        start_training
         show_status
     else
         print_error "Update failed!"
