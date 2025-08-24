@@ -206,6 +206,85 @@ check_training_status() {
     docker exec zerbinetto-bot tail -10 /app/training.log 2>/dev/null || print_warning "No training log found"
 }
 
+# Function to check comprehensive system status
+check_system_status() {
+    print_status "=== ZERBINETTO SYSTEM STATUS ==="
+    cd "$PROJECT_DIR"
+    
+    # Check container status
+    print_status "1. Container Status:"
+    if docker ps | grep -q "zerbinetto-bot"; then
+        container_status=$(docker ps --format "table {{.Names}}\t{{.Status}}" | grep zerbinetto-bot)
+        print_success "Container: $container_status"
+    else
+        print_error "Container is not running!"
+        return 1
+    fi
+    
+    # Check bot activity
+    print_status "2. Bot Activity:"
+    recent_bot_logs=$(docker logs zerbinetto-bot --tail 5 2>/dev/null | grep -E "(Game|move|turn)" | tail -3)
+    if [ -n "$recent_bot_logs" ]; then
+        print_success "Bot is active - Recent activity:"
+        echo "$recent_bot_logs" | while read line; do
+            echo "   $line"
+        done
+    else
+        print_warning "No recent bot activity found"
+    fi
+    
+    # Check training status
+    print_status "3. Training Status:"
+    if docker exec zerbinetto-bot ps aux | grep -q "trainer"; then
+        print_success "Training process is running"
+    else
+        print_warning "Training process is not running"
+    fi
+    
+    # Check training activity
+    recent_training_logs=$(docker exec zerbinetto-bot tail -5 /app/training.log 2>/dev/null | grep "ML Engine selected move" | tail -3)
+    if [ -n "$recent_training_logs" ]; then
+        print_success "Training is active - Recent moves:"
+        echo "$recent_training_logs" | while read line; do
+            echo "   $line"
+        done
+    else
+        print_warning "No recent training activity found"
+    fi
+    
+    # Check model file
+    print_status "4. Model Status:"
+    if [ -f "models/chess_model.pkl" ]; then
+        model_size=$(ls -lh models/chess_model.pkl | awk '{print $5}')
+        model_time=$(ls -lh models/chess_model.pkl | awk '{print $6, $7, $8}')
+        print_success "Model file exists: $model_size (last modified: $model_time)"
+    else
+        print_error "Model file not found!"
+    fi
+    
+    # Check permissions
+    print_status "5. Permissions:"
+    if [ -r "models/chess_model.pkl" ] && [ -w "models/chess_model.pkl" ]; then
+        print_success "Model file is readable and writable"
+    else
+        print_error "Model file permission issues!"
+    fi
+    
+    # Check active games
+    print_status "6. Active Games:"
+    active_games=$(docker logs zerbinetto-bot --tail 50 2>/dev/null | grep "Game.*state update" | tail -3)
+    if [ -n "$active_games" ]; then
+        print_success "Active games detected:"
+        echo "$active_games" | while read line; do
+            echo "   $line"
+        done
+    else
+        print_warning "No active games found"
+    fi
+    
+    print_status "=== STATUS CHECK COMPLETE ==="
+}
+
 # Function to show help
 show_help() {
     echo "Zerbinetto Deployment Script"
@@ -223,6 +302,7 @@ show_help() {
     echo "  deploy-log  Show deployment log"
     echo "  training-log Show training log"
     echo "  training-status Check training status"
+    echo "  status-full  Comprehensive system status check"
     echo "  rollback    Rollback to previous version"
     echo "  help        Show this help message"
     echo ""
@@ -245,7 +325,8 @@ deploy() {
     if check_health; then
         print_success "Deployment completed successfully!"
         start_training
-        show_status
+        print_status "Quick status check:"
+        check_system_status
     else
         print_error "Deployment failed!"
         rollback
@@ -265,7 +346,8 @@ update() {
     if check_health; then
         print_success "Update completed successfully!"
         start_training
-        show_status
+        print_status "Quick status check:"
+        check_system_status
     else
         print_error "Update failed!"
         rollback
@@ -314,6 +396,9 @@ main() {
             ;;
         "training-status")
             check_training_status
+            ;;
+        "status-full")
+            check_system_status
             ;;
         "rollback")
             rollback

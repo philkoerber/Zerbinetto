@@ -314,7 +314,7 @@ python3 scripts/train_model.py --continuous --iterations 100
 python3 scripts/train_model.py --games-per-iteration 100 --iterations 50
 ```
 
-### Deployment
+### Deployment & Monitoring
 
 ```bash
 # Full deployment (includes training)
@@ -323,17 +323,20 @@ python3 scripts/train_model.py --games-per-iteration 100 --iterations 50
 # Start training only
 ./scripts/deploy.sh train
 
-# Check status
-./scripts/deploy.sh status
+# Comprehensive system status check
+./scripts/deploy.sh status-full
 
-# View logs
-./scripts/deploy.sh logs
-
-# Monitor training progress
+# Check training status
 ./scripts/deploy.sh training-status
 
 # View training logs
 ./scripts/deploy.sh training-log
+
+# View bot logs
+./scripts/deploy.sh logs
+
+# Check container status
+./scripts/deploy.sh status
 ```
 
 ## ⚙️ Configuration
@@ -379,63 +382,17 @@ python3 scripts/train_model.py --games-per-iteration 10 --iterations 1
 python3 -c "from src.ml_engine import MLEngine; import chess; e = MLEngine(use_mcts=True); print(e.choose_move(chess.Board()))"
 ```
 
-## 📊 Performance & Results
 
-### Training Speed
-- **Games per Minute**: ~50 (depends on hardware)
-- **Training Examples**: ~1000 per iteration
-- **Model Convergence**: ~10-50 iterations
-- **Memory Usage**: ~50MB for model
-
-### Playing Strength Evolution
-
-| Training Stage | Playing Style | Strength |
-|----------------|---------------|----------|
-| **Initial** | Random moves | ~800 Elo |
-| **After 10 iterations** | Basic tactics | ~1200 Elo |
-| **After 50 iterations** | Positional play | ~1500 Elo |
-| **After 100 iterations** | Strategic thinking | ~1800 Elo |
-| **With MCTS** | Advanced planning | ~2000+ Elo |
-
-### Real-World Performance
-
-The bot has been tested and shows:
-- **Consistent Improvement**: Gets stronger with more training
-- **Stable Play**: No crashes or illegal moves
-- **Fast Response**: Moves in 1-3 seconds
-- **Memory Efficient**: Low resource usage
 
 ## 🔧 Development
 
-### Adding Features
+### Key Components
 
-1. **New Position Features**: Modify `ChessPositionEncoder`
-   ```python
-   def _get_additional_features(self, board):
-       features = []
-       # Add your new features here
-       features.append(new_feature_value)
-       return np.array(features)
-   ```
-
-2. **Different Network**: Update `SimpleNeuralNetwork`
-   ```python
-   class AdvancedNeuralNetwork:
-       def __init__(self, input_size=777, hidden_layers=[256, 128], output_size=1):
-           # Implement your network architecture
-   ```
-
-3. **Advanced Training**: Enhance `SelfPlayTrainer`
-   ```python
-   def advanced_training_method(self):
-       # Implement policy gradient, value networks, etc.
-   ```
-
-4. **MCTS Improvements**: Modify `MCTSWrapper`
-   ```python
-   def enhanced_simulation(self, board):
-       # Implement better simulation strategies
-   ```
+- **`src/ml_engine.py`**: Neural network chess engine
+- **`src/trainer.py`**: Self-play training system
+- **`src/game_handler.py`**: Game logic and move coordination
+- **`src/mcts_wrapper.py`**: Monte Carlo Tree Search wrapper
+- **`models/chess_model.pkl`**: Trained model file
 
 ### Model Persistence
 - Models are saved as pickle files
@@ -443,104 +400,51 @@ The bot has been tested and shows:
 - Engine reloads model on each game start
 - Version control for model evolution
 
-## 🚀 Future Enhancements
 
-### Short Term (1-3 months)
-1. **Advanced Neural Networks**: CNN, Transformer architectures
-2. **Better Training**: Policy gradient, value networks
-3. **Opening Books**: Database integration
-4. **Endgame Tables**: Endgame-specific evaluation
-
-### Medium Term (3-6 months)
-5. **Distributed Training**: Multi-GPU training
-6. **Model Compression**: Smaller, faster models
-7. **Advanced MCTS**: Parallel search, better pruning
-8. **Position Analysis**: Detailed move explanations
-
-### Long Term (6+ months)
-9. **Multi-Variant Support**: Chess960, variants
-10. **Human Learning**: Learn from human games
-11. **Cloud Training**: Scalable training infrastructure
-12. **API Service**: Provide chess analysis as a service
 
 ## 🛠️ Troubleshooting
 
+### Quick Diagnostics
+```bash
+# Comprehensive system check (recommended)
+./scripts/deploy.sh status-full
+
+# Check training status
+./scripts/deploy.sh training-status
+
+# View recent logs
+./scripts/deploy.sh logs
+```
+
 ### Common Issues
 
-1. **Model Not Found**: Creates new model automatically
+1. **Training stopped**: Check permissions and restart
    ```bash
-   # Check if model exists
-   ls -la models/chess_model.pkl
+   sudo chown 1000:1000 models/chess_model.pkl
+   ./scripts/deploy.sh train
    ```
 
-2. **Training Slow**: Reduce games per iteration
-   ```bash
-   python3 scripts/train_model.py --games-per-iteration 10
-   ```
-
-3. **Memory Issues**: Reduce batch size
-   ```python
-   # In trainer.py
-   self.batch_size = 16  # Reduce from 32
-   ```
-
-4. **Poor Performance**: Increase training iterations
-   ```bash
-   python3 scripts/train_model.py --iterations 200
-   ```
-
-5. **Bot not responding**: Check Lichess token in `.env`
+2. **Bot not responding**: Check Lichess token
    ```bash
    cat .env | grep LICHESS_TOKEN
    ```
 
-6. **Docker issues**: Use `make logs` to view container logs
+3. **Container issues**: Check container status
    ```bash
-   make logs
+   docker ps
+   docker logs zerbinetto-bot
    ```
 
-7. **API errors**: Verify token permissions on Lichess
-   - Go to https://lichess.org/account/oauth/token
-   - Check token permissions
 
-### Logs
-- **Training logs**: `training.log` (real-time training progress)
-- **Bot logs**: Console output (game activity)
-- **Deployment logs**: `deploy.log` (deployment history)
-- **Model saves**: `models/chess_model.pkl` (trained models)
-- **Docker logs**: `docker-compose logs` (container activity)
-
-### Training Monitoring
-
-The bot includes comprehensive training monitoring:
-
-```bash
-# Check if training is running
-./scripts/deploy.sh training-status
-
-# View real-time training progress
-./scripts/deploy.sh training-log
-
-# Monitor training metrics
-tail -f training.log | grep "Loss\|Iteration\|Games"
-```
-
-**Training Log Format:**
-```
-2025-08-24 17:30:15 - trainer - INFO - Starting training iteration 1/1000
-2025-08-24 17:30:20 - trainer - INFO - Generated 50 self-play games
-2025-08-24 17:30:25 - trainer - INFO - Epoch 1/10, Average Loss: 0.234567
-2025-08-24 17:30:30 - trainer - INFO - Model saved to models/chess_model.pkl
-```
 
 ## 🏗️ Architecture
 
-### System Design
-- **Event-driven**: Responds to Lichess game events
-- **Stateless**: No persistent storage required (except ML models)
-- **Scalable**: Docker containers for easy scaling
-- **Automated**: GitHub webhooks for continuous deployment
-- **ML-powered**: Self-improving through continuous training
+### Core Components
+- **LichessClient**: API communication with Lichess
+- **GameHandler**: Game state management and move coordination
+- **MLEngine**: Neural network position evaluation and move selection
+- **SelfPlayTrainer**: Continuous training through self-play games
+- **MCTSWrapper**: Monte Carlo Tree Search for advanced planning
 
 ### Data Flow
 ```
@@ -548,13 +452,6 @@ Lichess API → Game Handler → ML Engine → Move Selection → Lichess API
                 ↓
             Self-Play Trainer → Model Update → ML Engine
 ```
-
-### Key Components Interaction
-1. **LichessClient**: Handles all API communication
-2. **GameHandler**: Manages game state and move coordination
-3. **MLEngine**: Evaluates positions and selects moves
-4. **SelfPlayTrainer**: Generates training data and updates model
-5. **MCTSWrapper**: Provides advanced search capabilities
 
 ## 📝 Commands
 
