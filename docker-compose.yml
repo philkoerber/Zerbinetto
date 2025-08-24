@@ -15,6 +15,8 @@ services:
     volumes:
       # Mount logs directory for easy access
       - ./logs:/app/logs
+      # Mount models directory for persistent model storage
+      - ./models:/app/models
     # For development, you can override the command
     # command: ["python", "src/bot.py", "--debug"]
     
@@ -29,6 +31,8 @@ services:
       # Mount source code for development
       - .:/app
       - ./logs:/app/logs
+      # Mount models directory for persistent model storage
+      - ./models:/app/models
     command: ["python", "src/bot.py", "--debug"]
     profiles:
       - dev
