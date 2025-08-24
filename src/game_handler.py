@@ -74,7 +74,7 @@ class GameHandler:
             logger.info(f"It's our turn to move first in game {game_id}")
             # Make a move immediately
             await asyncio.sleep(1.0)  # Small delay
-            move = await self._generate_zerbinetto_move(game_data)
+            move = await self._generate_ml_move(game_data)
             if move:
                 logger.info(f"Making first move {move} in game {game_id}")
                 await self.lichess_client.make_move(game_id, move)
@@ -101,7 +101,7 @@ class GameHandler:
         for attempt in range(max_retries):
             try:
                 # Generate a legal move
-                move = await self._generate_zerbinetto_move(game_data)
+                move = await self._generate_ml_move(game_data)
                 if not move:
                     logger.warning(f"No legal move generated on attempt {attempt + 1}")
                     continue
