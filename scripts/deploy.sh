@@ -119,9 +119,30 @@ start_training() {
     # Fix permissions first
     fix_model_permissions
     
-    # Start training in background inside the Docker container with logging
-    # Run training indefinitely
-    docker exec -d zerbinetto-bot bash -c "python -m src.trainer --continuous --forever --games-per-iteration 50 > /app/training.log 2>&1"
+    # Start training in background inside the Docker container with log rotation
+    # Run training indefinitely with log rotation to prevent disk space issues
+    docker exec -d zerbinetto-bot bash -c "
+        # Create log rotation script
+        cat > /app/rotate_logs.sh << 'EOF'
+        #!/bin/bash
+        while true; do
+            sleep 3600  # Check every hour
+            if [ -f /app/training.log ] && [ \$(stat -c%s /app/training.log) -gt 10485760 ]; then  # 10MB
+                mv /app/training.log /app/training.log.old
+                touch /app/training.log
+                # Keep only last 5 log files
+                ls -t /app/training.log.* | tail -n +6 | xargs -r rm
+            fi
+        done
+        EOF
+        chmod +x /app/rotate_logs.sh
+        
+        # Start log rotation in background
+        /app/rotate_logs.sh &
+        
+        # Start training with log rotation
+        python -m src.trainer --continuous --forever --games-per-iteration 50 > /app/training.log 2>&1
+    "
     
     print_success "Continuous training started in background with logging to training.log"
 }
@@ -181,6 +202,63 @@ show_logs() {
 show_deploy_log() {
     print_status "Showing deployment log..."
     tail -f "$LOG_FILE"
+}
+
+# Function to cleanup container and logs
+cleanup_container() {
+    print_status "Cleaning up container and logs..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Stop container
+    docker-compose down
+    
+    # Clean up old logs and temporary files
+    docker system prune -f
+    
+    # Clean up old training logs (keep only last 5 files)
+    if [ -d "logs" ]; then
+        find logs/ -name "*.log" -type f -mtime +7 -delete 2>/dev/null || true
+    fi
+    
+    # Clean up old model backups (keep only last 3)
+    if [ -d "models" ]; then
+        ls -t models/chess_model.pkl.backup_* 2>/dev/null | tail -n +4 | xargs -r rm
+    fi
+    
+    print_success "Cleanup completed"
+}
+
+# Function to check disk usage
+check_disk_usage() {
+    print_status "Checking disk usage..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Check overall disk usage
+    disk_usage=$(df -h . | tail -1 | awk '{print $5}' | sed 's/%//')
+    print_status "Disk usage: ${disk_usage}%"
+    
+    if [ "$disk_usage" -gt 80 ]; then
+        print_warning "High disk usage detected! Consider running cleanup."
+    fi
+    
+    # Check Docker disk usage
+    docker_usage=$(docker system df --format "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}" 2>/dev/null || echo "Docker not available")
+    print_status "Docker disk usage:"
+    echo "$docker_usage"
+    
+    # Check model file sizes
+    if [ -d "models" ]; then
+        print_status "Model files:"
+        ls -lh models/ 2>/dev/null || echo "No models directory"
+    fi
+    
+    # Check log file sizes
+    if [ -d "logs" ]; then
+        print_status "Log files:"
+        ls -lh logs/ 2>/dev/null || echo "No logs directory"
+    fi
 }
 
 # Function to show training log
@@ -402,6 +480,12 @@ main() {
             ;;
         "status-full")
             check_system_status
+            ;;
+        "cleanup")
+            cleanup_container
+            ;;
+        "disk-usage")
+            check_disk_usage
             ;;
         "rollback")
             rollback

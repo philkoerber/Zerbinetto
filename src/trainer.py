@@ -233,11 +233,25 @@ class SelfPlayTrainer:
                 # Perform training iteration
                 self.train_iteration()
                 
-                # Save model periodically
+                # Save model periodically with rotation
                 if iteration % save_interval == 0:
-                    backup_path = f"{self.model_path}.backup"
+                    # Create timestamped backup
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    backup_path = f"{self.model_path}.backup_{timestamp}"
                     self.engine.save_model(backup_path)
                     logger.info(f"Model backup saved to {backup_path}")
+                    
+                    # Keep only last 3 backups to prevent disk space issues
+                    import glob
+                    backup_files = glob.glob(f"{self.model_path}.backup_*")
+                    if len(backup_files) > 3:
+                        backup_files.sort()
+                        for old_backup in backup_files[:-3]:
+                            try:
+                                os.remove(old_backup)
+                                logger.info(f"Removed old backup: {old_backup}")
+                            except:
+                                pass
                 
                 # Small delay between iterations
                 time.sleep(1)

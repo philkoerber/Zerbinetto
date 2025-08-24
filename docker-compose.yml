@@ -27,6 +27,11 @@ services:
     environment:
       - LICHESS_TOKEN=${LICHESS_TOKEN}
     restart: "no"  # Don't auto-restart in dev mode
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       # Mount source code for development
       - .:/app

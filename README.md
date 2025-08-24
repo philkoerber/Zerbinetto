@@ -337,7 +337,12 @@ python3 scripts/train_model.py --games-per-iteration 100 --iterations 50
 
 # Check container status
 ./scripts/deploy.sh status
-```
+
+# Check disk usage
+./scripts/deploy.sh disk-usage
+
+# Cleanup old logs and models
+./scripts/deploy.sh cleanup
 
 ## ⚙️ Configuration
 
@@ -414,7 +419,17 @@ python3 -c "from src.ml_engine import MLEngine; import chess; e = MLEngine(use_m
 
 # View recent logs
 ./scripts/deploy.sh logs
+
+# Monitor disk usage
+./scripts/deploy.sh disk-usage
 ```
+
+### Disk Management
+The system includes automatic disk space management:
+- **Log Rotation**: Training logs are automatically rotated when they exceed 10MB
+- **Model Backups**: Only the last 3 model backups are kept
+- **Docker Logs**: Limited to 10MB with max 3 files
+- **Manual Cleanup**: Use `./scripts/deploy.sh cleanup` to remove old files
 
 ### Common Issues
 
