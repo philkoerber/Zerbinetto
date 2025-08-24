@@ -62,8 +62,8 @@ class GameHandler:
             'our_color': our_color  # 'white' or 'black'
         }
         
-        # Set game ID for Tal mode activation
-        self.zerbinetto_engine.set_game_id(game_id)
+        # Store game ID for future reference
+        self.zerbinetto_engine.game_id = game_id
         
         logger.info(f"We are playing as {our_color} in game {game_id}")
         

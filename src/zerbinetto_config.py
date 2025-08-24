@@ -1,24 +1,14 @@
 """
 Zerbinetto Engine Configuration
 
-Configuration parameters for the Zerbinetto chess engine.
+Simple, solid configuration for the Zerbinetto chess engine.
 """
 
 # Search parameters
-SEARCH_DEPTH = 4  # Depth for minimax search (balanced for strength vs speed)
-RANDOMNESS_FACTOR = 0.15  # Factor for move randomization (0.0-1.0)
+SEARCH_DEPTH = 4  # Depth for minimax search
+RANDOMNESS_FACTOR = 0.1  # Factor for move randomization (0.0-1.0)
 
-# Tactical bias weights (in pawns)
-BIAS_WEIGHTS = {
-    'sacrifice': 0.05,          # Small bonus for sacrifices (reduced from 0.3)
-    'open_lines': 0.08,         # Bonus for opening lines (reduced from 0.15)
-    'king_attack': 0.12,        # Bonus for king attacks (reduced from 0.25)
-    'imbalance': 0.1,           # Bonus for imbalanced positions (reduced from 0.2)
-    'simplification': -0.05,    # Penalty for simplifying (reduced from -0.1)
-    'own_king_exposure': -0.1,  # Increased penalty for own king exposure
-}
-
-# Piece values for basic evaluation
+# Piece values for material evaluation
 PIECE_VALUES = {
     'pawn': 1.0,
     'knight': 3.0,
@@ -85,7 +75,7 @@ PIECE_SQUARE_TABLES = {
         [-0.1,  0.0,  0.05, 0.05, 0.05, 0.05, 0.0,-0.1],
         [-0.05, 0.0,  0.05, 0.05, 0.05, 0.05, 0.0,-0.05],
         [0.0,  0.0,  0.05, 0.05, 0.05, 0.05, 0.0,-0.05],
-        [-0.1,  0.05, 0.05, 0.05, 0.05, 0.05, 0.0,-0.1],
+        [-0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.0,-0.1],
         [-0.1,  0.0,  0.05, 0.0,  0.0,  0.0,  0.0,-0.1],
         [-0.2,-0.1,-0.1,-0.05,-0.05,-0.1,-0.1,-0.2]
     ],
@@ -120,35 +110,11 @@ PAWN_STRUCTURE_WEIGHTS = {
     'connected_pawns': 0.05,    # Bonus for connected pawns
 }
 
-# King safety evaluation
-KING_SAFETY_WEIGHTS = {
-    'pawn_shield': 0.1,         # Bonus for pawn shield
-    'king_distance_center': 0.05, # Penalty for king being central
-    'enemy_attackers': -0.1,    # Penalty per enemy piece attacking king area
-    'castled': 0.2,             # Bonus for castled king
-}
-
-# Tal mode configuration
-TAL_MODE_CONFIG = {
-    'enabled': True,            # Enable Tal mode
-    'frequency': 0.15,          # 15% chance per game to enter Tal mode
-    'sacrifice_threshold': 0.5, # Maximum material to sacrifice in Tal mode (in pawns)
-    'flashy_bonus': 0.3,        # Bonus for flashy moves in Tal mode
-}
-
 # Engine behavior settings
 ENGINE_SETTINGS = {
-    'max_move_time': 8.0,       # Maximum time to think about a move (seconds) - reasonable for online play
+    'max_move_time': 8.0,       # Maximum time to think about a move (seconds)
     'move_delay': 1.0,          # Delay before making a move (seconds)
     'enable_debug_logging': True,  # Enable detailed move evaluation logging
-    'quiescence_depth': 5,      # Depth for quiescence search
+    'quiescence_depth': 3,      # Depth for quiescence search
     'transposition_table_size': 10000,  # Size of transposition table
-}
-
-# Style constraints
-STYLE_CONSTRAINTS = {
-    'avoid_trivial_blunders': True,  # Basic blunder check before committing to move
-    'prioritize_chaos': True,        # Prefer chaotic middlegames over calm positions
-    'prefer_counterplay': True,      # In lost positions, prefer counterplay over passive defense
-    'avoid_grinding': True,          # In won positions, avoid grinding endgames
 }

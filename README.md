@@ -43,7 +43,7 @@ python src/bot.py
 
 ## Features
 
-- **Tactical Chess Engine**: Plays in Tal-inspired aggressive style with minimax + alpha-beta pruning
+- **Solid Chess Engine**: Clean, maintainable engine with fundamental chess principles
 - **Automatic Play**: Accepts and plays games automatically
 - **Legal Moves**: Uses python-chess for move validation
 - **Queue Management**: Handles multiple game requests
@@ -58,13 +58,10 @@ Zerbinetto/
 │   ├── bot.py             # Main bot script
 │   ├── game_handler.py    # Game logic and move coordination
 │   ├── lichess_client.py  # Lichess API client
-│   ├── zerbinetto_engine.py # Tal-inspired chess engine
+│   ├── zerbinetto_engine.py # Solid chess engine
 │   └── zerbinetto_config.py # Engine configuration
 ├── tests/                 # Test suite
-│   ├── combined_engine_test.py # Comprehensive engine tests
-│   ├── test_enhanced_engine.py # Enhanced engine feature tests
-│   ├── test_zerbinetto_engine.py # Basic move quality tests
-│   └── timing_test.py     # Performance timing tests
+│   └── test_engine.py     # Comprehensive engine tests
 ├── scripts/               # Deployment scripts
 ├── config/                # Configuration files
 ├── Dockerfile            # Docker configuration
@@ -74,13 +71,12 @@ Zerbinetto/
 
 ## Chess Engine
 
-Zerbinetto uses a custom chess engine inspired by Mikhail Tal's tactical style:
+Zerbinetto uses a clean, solid chess engine focused on fundamental principles:
 
 - **Search Algorithm**: Minimax with alpha-beta pruning, move ordering, quiescence search
-- **Positional Heuristics**: Piece-square tables, king safety, pawn structure, mobility
-- **Playing Style**: Aggressive, tactical, sacrificial when sound
-- **Tal Mode**: 15% chance per game for extra flashy, sacrificial play
-- **Strength**: Targets ~2100 Elo rating
+- **Positional Evaluation**: Piece-square tables, pawn structure, mobility
+- **Playing Style**: Solid, principled chess
+- **Strength**: Targets ~1800-2000 Elo rating
 - **Performance**: 4 ply depth, ~1-3 seconds per move, transposition table caching
 - **Configuration**: Adjustable parameters in `src/zerbinetto_config.py`
 
@@ -92,17 +88,8 @@ Run the test suite to verify engine functionality:
 # Activate virtual environment
 source venv/bin/activate
 
-# Run comprehensive tests
-python tests/combined_engine_test.py
-
-# Run enhanced engine feature tests
-python tests/test_enhanced_engine.py
-
-# Run basic move tests
-python tests/test_zerbinetto_engine.py
-
-# Run performance timing tests
-python tests/timing_test.py
+# Run comprehensive engine tests
+python tests/test_engine.py
 ```
 
 ## Configuration
@@ -127,4 +114,3 @@ Engine parameters can be adjusted in `src/zerbinetto_config.py`:
 - **Stateless**: No persistent storage required
 - **Scalable**: Docker containers for easy scaling
 - **Automated**: GitHub webhooks for continuous deployment
-# Testing automatic webhook deployment

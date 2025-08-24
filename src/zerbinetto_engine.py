@@ -1,39 +1,22 @@
 """
-Zerbinetto Engine V2 - Enhanced Chess Engine
+Zerbinetto Engine - Simple and Solid Chess Engine
 
-Advanced chess engine with positional heuristics, improved search,
-move ordering, quiescence search, transposition table, and Tal mode.
+A clean, maintainable chess engine focused on fundamental chess principles.
 """
 
 import chess
-import chess.engine
 import logging
 import random
 import time
-import hashlib
-from typing import List, Tuple, Optional, Dict, Set
-from dataclasses import dataclass
+from typing import List, Optional
 from collections import OrderedDict
 
 from zerbinetto_config import (
-    BIAS_WEIGHTS, PIECE_VALUES, POSITION_WEIGHTS, PIECE_SQUARE_TABLES,
-    PAWN_STRUCTURE_WEIGHTS, KING_SAFETY_WEIGHTS, TAL_MODE_CONFIG,
-    ENGINE_SETTINGS
+    PIECE_VALUES, POSITION_WEIGHTS, PIECE_SQUARE_TABLES,
+    PAWN_STRUCTURE_WEIGHTS, ENGINE_SETTINGS
 )
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class MoveEvaluation:
-    """Represents a move with its evaluation and tactical characteristics."""
-    move: chess.Move
-    score: float
-    is_sacrifice: bool = False
-    opens_lines: bool = False
-    attacks_king: bool = False
-    creates_imbalance: bool = False
-    tactical_bonus: float = 0.0
-    is_flashy: bool = False
 
 class TranspositionTable:
     """Simple transposition table for caching position evaluations."""
@@ -59,10 +42,10 @@ class TranspositionTable:
         self.table[zobrist_hash] = (depth, score)
 
 class ZerbinettoEngine:
-    """Enhanced chess engine with advanced positional evaluation and search."""
+    """Simple and solid chess engine with fundamental evaluation and search."""
     
-    def __init__(self, search_depth: int = 4, randomness_factor: float = 0.15):
-        """Initialize the enhanced Zerbinetto engine.
+    def __init__(self, search_depth: int = 4, randomness_factor: float = 0.1):
+        """Initialize the Zerbinetto engine.
         
         Args:
             search_depth: Depth for minimax search
@@ -71,13 +54,8 @@ class ZerbinettoEngine:
         self.search_depth = search_depth
         self.randomness_factor = randomness_factor
         self.transposition_table = TranspositionTable(ENGINE_SETTINGS['transposition_table_size'])
-        self.tal_mode_active = False
-        self.game_id = None
         
-        # Tactical bias weights
-        self.bias_weights = BIAS_WEIGHTS
-        
-        # Piece values for basic evaluation
+        # Piece values for material evaluation
         self.piece_values = {
             chess.PAWN: PIECE_VALUES['pawn'],
             chess.KNIGHT: PIECE_VALUES['knight'],
@@ -87,16 +65,8 @@ class ZerbinettoEngine:
             chess.KING: PIECE_VALUES['king']
         }
     
-    def set_game_id(self, game_id: str):
-        """Set game ID for Tal mode activation."""
-        self.game_id = game_id
-        # Activate Tal mode based on frequency
-        if TAL_MODE_CONFIG['enabled'] and random.random() < TAL_MODE_CONFIG['frequency']:
-            self.tal_mode_active = True
-            logger.info(f"🎭 Tal mode activated for game {game_id}!")
-    
     def get_best_move(self, board: chess.Board, time_limit: float = 8.0) -> chess.Move:
-        """Get the best move using enhanced evaluation and search.
+        """Get the best move using solid evaluation and search.
         
         Args:
             board: Current chess position
@@ -116,36 +86,36 @@ class ZerbinettoEngine:
         ordered_moves = self._order_moves(board, legal_moves)
         
         # Evaluate all moves
-        move_evaluations = []
+        move_scores = []
         for move in ordered_moves:
-            evaluation = self._evaluate_move(board, move)
-            move_evaluations.append(evaluation)
+            board_copy = board.copy()
+            board_copy.push(move)
+            
+            # Get evaluation from minimax search
+            score = self._minimax_search(board_copy, self.search_depth - 1, 
+                                       float('-inf'), float('inf'), False)
+            move_scores.append((move, score))
         
         # Sort by score (best first)
-        move_evaluations.sort(key=lambda x: x.score, reverse=True)
+        move_scores.sort(key=lambda x: x[1], reverse=True)
         
         # Apply randomization for moves with similar scores
-        best_moves = self._select_best_moves_with_randomization(move_evaluations)
+        best_moves = self._select_best_moves_with_randomization(move_scores)
         
         # Log the top moves for debugging
         if ENGINE_SETTINGS['enable_debug_logging']:
             logger.debug(f"Top moves:")
-            for i, eval_info in enumerate(best_moves[:5]):
-                logger.debug(f"  {i+1}. {eval_info.move.uci()}: {eval_info.score:.2f} "
-                            f"(sacrifice: {eval_info.is_sacrifice}, "
-                            f"tactical_bonus: {eval_info.tactical_bonus:.2f}, "
-                            f"flashy: {eval_info.is_flashy})")
+            for i, (move, score) in enumerate(best_moves[:5]):
+                logger.debug(f"  {i+1}. {move.uci()}: {score:.2f}")
         
         # Select the best move
-        selected_eval = best_moves[0]
+        selected_move, selected_score = best_moves[0]
         elapsed_time = time.time() - start_time
         
-        logger.info(f"Selected move: {selected_eval.move.uci()} "
-                   f"(score: {selected_eval.score:.2f}, "
-                   f"time: {elapsed_time:.2f}s, "
-                   f"Tal mode: {self.tal_mode_active})")
+        logger.info(f"Selected move: {selected_move.uci()} "
+                   f"(score: {selected_score:.2f}, time: {elapsed_time:.2f}s)")
         
-        return selected_eval.move
+        return selected_move
     
     def _order_moves(self, board: chess.Board, moves: List[chess.Move]) -> List[chess.Move]:
         """Order moves for better alpha-beta pruning efficiency.
@@ -163,7 +133,7 @@ class ZerbinettoEngine:
             score = 0
             
             # Checks first
-            if board.is_check():
+            if board.gives_check(move):
                 score += 1000
             
             # Captures
@@ -199,67 +169,9 @@ class ZerbinettoEngine:
         move_scores.sort(key=lambda x: x[1], reverse=True)
         return [move for move, score in move_scores]
     
-    def _evaluate_move(self, board: chess.Board, move: chess.Move) -> MoveEvaluation:
-        """Evaluate a single move with enhanced positional analysis.
-        
-        Args:
-            board: Current position
-            move: Move to evaluate
-            
-        Returns:
-            MoveEvaluation with score and tactical characteristics
-        """
-        # Make the move on a copy of the board
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        # Get base evaluation from minimax with quiescence search
-        base_score = self._minimax_search(board_copy, self.search_depth - 1, 
-                                        float('-inf'), float('inf'), False)
-        
-        # Analyze tactical characteristics
-        is_sacrifice = self._is_sacrifice(board, move)
-        opens_lines = self._opens_lines(board, move)
-        attacks_king = self._attacks_king(board_copy)
-        creates_imbalance = self._creates_imbalance(board, board_copy)
-        is_flashy = self._is_flashy_move(board, move)
-        
-        # Calculate tactical bonus
-        tactical_bonus = 0.0
-        if is_sacrifice:
-            tactical_bonus += self.bias_weights['sacrifice']
-        if opens_lines:
-            tactical_bonus += self.bias_weights['open_lines']
-        if attacks_king:
-            tactical_bonus += self.bias_weights['king_attack']
-        if creates_imbalance:
-            tactical_bonus += self.bias_weights['imbalance']
-        
-        # Tal mode bonus for flashy moves
-        if self.tal_mode_active and is_flashy:
-            tactical_bonus += TAL_MODE_CONFIG['flashy_bonus']
-        
-        # Apply tactical bonus to score
-        final_score = base_score + tactical_bonus
-        
-        # Apply blunder penalty (heavily penalize obvious blunders)
-        if self._is_blunder(board, move):
-            final_score -= 5.0
-        
-        return MoveEvaluation(
-            move=move,
-            score=final_score,
-            is_sacrifice=is_sacrifice,
-            opens_lines=opens_lines,
-            attacks_king=attacks_king,
-            creates_imbalance=creates_imbalance,
-            tactical_bonus=tactical_bonus,
-            is_flashy=is_flashy
-        )
-    
     def _minimax_search(self, board: chess.Board, depth: int, alpha: float, 
                        beta: float, maximizing: bool) -> float:
-        """Enhanced minimax search with transposition table and quiescence search.
+        """Minimax search with alpha-beta pruning and transposition table.
         
         Args:
             board: Current position
@@ -379,7 +291,7 @@ class ZerbinettoEngine:
             return min_eval
     
     def _evaluate_position(self, board: chess.Board) -> float:
-        """Enhanced position evaluation with positional heuristics.
+        """Solid position evaluation with material and positional factors.
         
         Args:
             board: Position to evaluate
@@ -402,9 +314,6 @@ class ZerbinettoEngine:
         # Pawn structure evaluation
         pawn_structure_score = self._evaluate_pawn_structure(board)
         
-        # King safety evaluation
-        king_safety_score = self._evaluate_king_safety(board)
-        
         # Mobility evaluation
         mobility_score = self._evaluate_mobility(board)
         
@@ -412,7 +321,6 @@ class ZerbinettoEngine:
         total_score = (material_score + 
                       positional_score * POSITION_WEIGHTS['piece_square_tables'] +
                       pawn_structure_score * POSITION_WEIGHTS['pawn_structure'] +
-                      king_safety_score * POSITION_WEIGHTS['king_safety'] +
                       mobility_score * POSITION_WEIGHTS['mobility'])
         
         return total_score
@@ -610,7 +518,6 @@ class ZerbinettoEngine:
         
         # Check if there are enemy pawns in adjacent files that can stop this pawn
         enemy_color = not color
-        enemy_king_rank = 0 if color else 7
         
         for adj_file in [file - 1, file, file + 1]:
             if 0 <= adj_file <= 7:
@@ -660,130 +567,6 @@ class ZerbinettoEngine:
         
         return False
     
-    def _evaluate_king_safety(self, board: chess.Board) -> float:
-        """Evaluate king safety.
-        
-        Args:
-            board: Position to evaluate
-            
-        Returns:
-            King safety score
-        """
-        score = 0.0
-        
-        # Evaluate white king safety
-        white_king = board.king(chess.WHITE)
-        if white_king:
-            score += self._evaluate_king_safety_for_color(board, white_king, chess.WHITE)
-        
-        # Evaluate black king safety
-        black_king = board.king(chess.BLACK)
-        if black_king:
-            score -= self._evaluate_king_safety_for_color(board, black_king, chess.BLACK)
-        
-        return score
-    
-    def _evaluate_king_safety_for_color(self, board: chess.Board, king_square: int, color: bool) -> float:
-        """Evaluate king safety for a specific color.
-        
-        Args:
-            board: Position to evaluate
-            king_square: Square of the king
-            color: Color of the king
-            
-        Returns:
-            King safety score for the color
-        """
-        score = 0.0
-        file = chess.square_file(king_square)
-        rank = chess.square_rank(king_square)
-        
-        # Check if king is castled
-        if self._is_castled_king(king_square, color):
-            score += KING_SAFETY_WEIGHTS['castled']
-        
-        # Check pawn shield
-        pawn_shield_score = self._evaluate_pawn_shield(board, king_square, color)
-        score += pawn_shield_score * KING_SAFETY_WEIGHTS['pawn_shield']
-        
-        # Penalty for central king in middlegame
-        if not self._is_endgame(board):
-            center_distance = abs(file - 3.5) + abs(rank - 3.5)
-            score -= center_distance * KING_SAFETY_WEIGHTS['king_distance_center']
-        
-        # Count enemy attackers near king
-        enemy_attackers = self._count_enemy_attackers(board, king_square, color)
-        score += enemy_attackers * KING_SAFETY_WEIGHTS['enemy_attackers']
-        
-        return score
-    
-    def _is_castled_king(self, king_square: int, color: bool) -> bool:
-        """Check if king is castled.
-        
-        Args:
-            king_square: Square of the king
-            color: Color of the king
-            
-        Returns:
-            True if the king is castled
-        """
-        file = chess.square_file(king_square)
-        rank = chess.square_rank(king_square)
-        
-        if color == chess.WHITE:
-            return rank == 0 and file in [1, 2, 5, 6]  # Kingside or queenside castled
-        else:
-            return rank == 7 and file in [1, 2, 5, 6]  # Kingside or queenside castled
-    
-    def _evaluate_pawn_shield(self, board: chess.Board, king_square: int, color: bool) -> float:
-        """Evaluate pawn shield around king.
-        
-        Args:
-            board: Position to evaluate
-            king_square: Square of the king
-            color: Color of the king
-            
-        Returns:
-            Pawn shield score
-        """
-        score = 0.0
-        file = chess.square_file(king_square)
-        rank = chess.square_rank(king_square)
-        
-        # Check pawns in front of king
-        for adj_file in [file - 1, file, file + 1]:
-            if 0 <= adj_file <= 7:
-                for r in range(max(0, rank - 2), rank + 1):
-                    square = chess.square(adj_file, r)
-                    piece = board.piece_at(square)
-                    if piece and piece.piece_type == chess.PAWN and piece.color == color:
-                        score += 1.0
-        
-        return score
-    
-    def _count_enemy_attackers(self, board: chess.Board, king_square: int, color: bool) -> int:
-        """Count enemy pieces attacking near the king.
-        
-        Args:
-            board: Position to evaluate
-            king_square: Square of the king
-            color: Color of the king
-            
-        Returns:
-            Number of enemy attackers
-        """
-        enemy_color = not color
-        count = 0
-        
-        # Check squares around king
-        for square in chess.SQUARES:
-            if chess.square_distance(square, king_square) <= 2:
-                piece = board.piece_at(square)
-                if piece and piece.color == enemy_color:
-                    count += 1
-        
-        return count
-    
     def _evaluate_mobility(self, board: chess.Board) -> float:
         """Evaluate piece mobility.
         
@@ -821,229 +604,33 @@ class ZerbinettoEngine:
         
         return total_pieces <= 6
     
-    def _is_flashy_move(self, board: chess.Board, move: chess.Move) -> bool:
-        """Check if a move is flashy (sacrificial, tactical).
+    def _select_best_moves_with_randomization(self, move_scores: List[tuple]) -> List[tuple]:
+        """Select best moves with randomization for similar scores.
         
         Args:
-            board: Current position
-            move: Move to check
+            move_scores: List of (move, score) tuples
             
         Returns:
-            True if the move is flashy
+            Sorted list of (move, score) tuples with randomization applied
         """
-        # Check if it's a sacrifice
-        if self._is_sacrifice(board, move):
-            return True
-        
-        # Check if it's a check
-        if board.gives_check(move):
-            return True
-        
-        # Check if it's a capture
-        if board.is_capture(move):
-            return True
-        
-        # Check if it creates discovered attacks
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        # Check if we can attack the enemy king or queen
-        enemy_king = board_copy.king(not board_copy.turn)
-        enemy_queens = list(board_copy.pieces(chess.QUEEN, not board_copy.turn))
-        
-        if enemy_king:
-            for attack_move in board_copy.legal_moves:
-                if attack_move.to_square == enemy_king:
-                    return True
-        
-        if enemy_queens:
-            for attack_move in board_copy.legal_moves:
-                if attack_move.to_square in enemy_queens:
-                    return True
-        
-        return False
-    
-    # Keep existing methods for compatibility
-    def _is_sacrifice(self, board: chess.Board, move: chess.Move) -> bool:
-        """Check if a move is a sacrifice (losing material for initiative)."""
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        material_before = self._evaluate_material(board)
-        material_after = self._evaluate_material(board_copy)
-        
-        if material_after < material_before:
-            material_loss = material_before - material_after
-            
-            # Don't sacrifice more than threshold in Tal mode
-            if self.tal_mode_active and material_loss > TAL_MODE_CONFIG['sacrifice_threshold']:
-                return False
-            
-            if self._has_tactical_opportunities(board_copy):
-                if not self._is_blunder(board, move):
-                    return True
-        
-        return False
-    
-    def _has_tactical_opportunities(self, board: chess.Board) -> bool:
-        """Check if position has tactical opportunities."""
-        if board.is_check():
-            return True
-        
-        enemy_king = board.king(not board.turn)
-        if enemy_king is not None:
-            king_attacks = 0
-            for move in board.legal_moves:
-                if move.to_square == enemy_king or self._attacks_square(board, move, enemy_king):
-                    king_attacks += 1
-            
-            if king_attacks >= 2:
-                return True
-        
-        for move in board.legal_moves:
-            if self._creates_discovered_attack(board, move):
-                return True
-        
-        return False
-    
-    def _attacks_square(self, board: chess.Board, move: chess.Move, square: chess.Square) -> bool:
-        """Check if a move attacks a specific square."""
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        for from_square in chess.SQUARES:
-            piece = board_copy.piece_at(from_square)
-            if piece and piece.color == board_copy.turn:
-                if board_copy.is_attacked_by(board_copy.turn, square):
-                    return True
-        
-        return False
-    
-    def _creates_discovered_attack(self, board: chess.Board, move: chess.Move) -> bool:
-        """Check if a move creates a discovered attack."""
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        enemy_king = board_copy.king(not board_copy.turn)
-        enemy_queens = list(board_copy.pieces(chess.QUEEN, not board_copy.turn))
-        
-        if enemy_king:
-            for attack_move in board_copy.legal_moves:
-                if attack_move.to_square == enemy_king:
-                    return True
-        
-        if enemy_queens:
-            for attack_move in board_copy.legal_moves:
-                if attack_move.to_square in enemy_queens:
-                    return True
-        
-        return False
-    
-    def _opens_lines(self, board: chess.Board, move: chess.Move) -> bool:
-        """Check if a move opens lines (files, ranks, diagonals)."""
-        from_square = move.from_square
-        to_square = move.to_square
-        
-        piece = board.piece_at(from_square)
-        if piece is None:
-            return False
-        
-        if piece.piece_type == chess.PAWN:
-            file_before = chess.square_file(from_square)
-            file_after = chess.square_file(to_square)
-            if file_before != file_after:
-                return True
-        
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        enemy_king = board.king(not board.turn)
-        if enemy_king is not None:
-            attacks_before = len([m for m in board.legal_moves if m.to_square == enemy_king])
-            attacks_after = len([m for m in board_copy.legal_moves if m.to_square == enemy_king])
-            if attacks_after > attacks_before:
-                return True
-        
-        return False
-    
-    def _attacks_king(self, board: chess.Board) -> bool:
-        """Check if the position attacks the enemy king."""
-        enemy_king = board.king(not board.turn)
-        if enemy_king is None:
-            return False
-        
-        return board.is_attacked_by(board.turn, enemy_king)
-    
-    def _creates_imbalance(self, board_before: chess.Board, board_after: chess.Board) -> bool:
-        """Check if a move creates an imbalanced position."""
-        white_bishops = len(board_after.pieces(chess.BISHOP, chess.WHITE))
-        black_bishops = len(board_after.pieces(chess.BISHOP, chess.BLACK))
-        
-        if white_bishops == 1 and black_bishops == 1:
-            white_bishop_square = list(board_after.pieces(chess.BISHOP, chess.WHITE))[0]
-            black_bishop_square = list(board_after.pieces(chess.BISHOP, chess.BLACK))[0]
-            
-            white_color = chess.square_color(white_bishop_square)
-            black_color = chess.square_color(black_bishop_square)
-            
-            if white_color != black_color:
-                return True
-        
-        white_pawns = board_after.pieces(chess.PAWN, chess.WHITE)
-        black_pawns = board_after.pieces(chess.PAWN, chess.BLACK)
-        
-        if len(white_pawns) != len(black_pawns):
-            return True
-        
-        return False
-    
-    def _is_blunder(self, board: chess.Board, move: chess.Move) -> bool:
-        """Check if a move is a blunder (losing material without compensation)."""
-        board_copy = board.copy()
-        board_copy.push(move)
-        
-        for opponent_move in board_copy.legal_moves:
-            board_copy.push(opponent_move)
-            
-            material_after_opponent = self._evaluate_material(board_copy)
-            material_before_move = self._evaluate_material(board)
-            
-            if material_after_opponent < material_before_move - 1.0:
-                board_copy.pop()
-                return True
-            
-            board_copy.pop()
-        
-        return False
-    
-    def _own_king_exposure(self, board: chess.Board) -> bool:
-        """Check if our own king is exposed."""
-        our_king = board.king(board.turn)
-        if our_king is None:
-            return False
-        
-        return board.is_attacked_by(not board.turn, our_king)
-    
-    def _select_best_moves_with_randomization(self, move_evaluations: List[MoveEvaluation]) -> List[MoveEvaluation]:
-        """Select best moves with randomization for similar scores."""
-        if not move_evaluations:
+        if not move_scores:
             return []
         
-        best_score = move_evaluations[0].score
+        best_score = move_scores[0][1]
         similar_moves = []
         
-        for eval_info in move_evaluations:
-            score_diff = abs(eval_info.score - best_score)
+        for move, score in move_scores:
+            score_diff = abs(score - best_score)
             if score_diff <= self.randomness_factor:
-                similar_moves.append(eval_info)
+                similar_moves.append((move, score))
         
         if len(similar_moves) > 1:
             random.shuffle(similar_moves)
         
         result = similar_moves.copy()
-        for eval_info in move_evaluations:
-            if eval_info not in similar_moves:
-                result.append(eval_info)
+        for move, score in move_scores:
+            if (move, score) not in similar_moves:
+                result.append((move, score))
         
         return result
     

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Combined Engine Test Suite
+Comprehensive Test Suite for Zerbinetto Engine
 
-Comprehensive test suite for the Zerbinetto chess engine.
-Tests both move quality and performance timing.
+Tests the simplified Zerbinetto chess engine with various positions,
+performance benchmarks, and functionality verification.
 """
 
 import chess
@@ -16,9 +16,33 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from zerbinetto_engine import ZerbinettoEngine
 
+def test_basic_functionality():
+    """Test basic engine functionality."""
+    print("=" * 60)
+    print("BASIC FUNCTIONALITY TESTS")
+    print("=" * 60)
+    
+    engine = ZerbinettoEngine(search_depth=3, randomness_factor=0.1)
+    
+    # Test starting position
+    board = chess.Board()
+    print(f"Starting position FEN: {board.fen()}")
+    
+    best_move = engine.get_best_move(board)
+    print(f"Best move: {best_move.uci()} ({board.san(best_move)})")
+    
+    # Make the move and test again
+    board.push(best_move)
+    print(f"Position after move: {board.fen()}")
+    
+    best_move2 = engine.get_best_move(board)
+    print(f"Best move: {best_move2.uci()} ({board.san(best_move2)})")
+    
+    print("Basic functionality test completed!")
+
 def test_move_quality():
     """Test the engine's move quality across different position types."""
-    print("=" * 60)
+    print("\n" + "=" * 60)
     print("MOVE QUALITY TESTS")
     print("=" * 60)
     
@@ -34,24 +58,19 @@ def test_move_quality():
             "description": "Position with tactical opportunities"
         },
         {
-            "name": "King Attack Position",
-            "fen": "rnbqk2r/pppp1ppp/5n2/2b1p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1", 
-            "description": "Position where enemy king is exposed"
-        },
-        {
             "name": "Middlegame Position",
             "fen": "r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 0 1",
             "description": "Typical middlegame with pieces developed"
         },
         {
-            "name": "Sacrifice Temptation",
-            "fen": "r2qkb1r/ppp2ppp/2n2n2/3pp3/2B1P1b1/3P1N2/PPP2PPP/RNBQK2R w KQkq - 0 1",
-            "description": "Position where unsound sacrifice might be tempting"
+            "name": "Pawn Structure Test",
+            "fen": "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 1",
+            "description": "Position to test pawn structure evaluation"
         },
         {
             "name": "Endgame Position",
             "fen": "8/8/8/4k3/4K3/8/8/8 w - - 0 1",
-            "description": "Simple king and pawn endgame"
+            "description": "Simple king endgame"
         }
     ]
     
@@ -77,6 +96,46 @@ def test_move_quality():
         except Exception as e:
             print(f"   ERROR: {e}")
 
+def test_evaluation_functions():
+    """Test individual evaluation functions."""
+    print("\n" + "=" * 60)
+    print("EVALUATION FUNCTION TESTS")
+    print("=" * 60)
+    
+    engine = ZerbinettoEngine()
+    
+    # Test material evaluation
+    board = chess.Board()
+    material_score = engine._evaluate_material(board)
+    print(f"Starting position material score: {material_score:.2f}")
+    
+    # Test position with white up a pawn
+    board = chess.Board("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+    material_score = engine._evaluate_material(board)
+    print(f"White up a pawn material score: {material_score:.2f}")
+    
+    # Test positional evaluation
+    board = chess.Board()
+    positional_score = engine._evaluate_positional_factors(board)
+    print(f"Starting position positional score: {positional_score:.2f}")
+    
+    # Test pawn structure evaluation
+    pawn_score = engine._evaluate_pawn_structure(board)
+    print(f"Starting position pawn structure score: {pawn_score:.2f}")
+    
+    # Test mobility evaluation
+    mobility_score = engine._evaluate_mobility(board)
+    print(f"Starting position mobility score: {mobility_score:.2f}")
+    
+    # Test endgame detection
+    is_endgame = engine._is_endgame(board)
+    print(f"Starting position is endgame: {is_endgame}")
+    
+    # Test endgame position
+    board = chess.Board("4k3/8/8/8/8/8/4P3/4K3 w - - 0 1")
+    is_endgame = engine._is_endgame(board)
+    print(f"Endgame position is endgame: {is_endgame}")
+
 def test_performance():
     """Test engine performance across different search depths."""
     print("\n" + "=" * 60)
@@ -87,7 +146,7 @@ def test_performance():
     fen = "r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 0 1"
     board = chess.Board(fen)
     
-    print(f"\nTest Position: {fen}")
+    print(f"Test Position: {fen}")
     print(f"Legal moves: {len(list(board.legal_moves))}")
     print("\nDepth vs Performance:")
     
@@ -119,7 +178,7 @@ def test_randomization():
     # Starting position for consistency
     board = chess.Board()
     
-    print(f"\nTesting move variation in starting position...")
+    print(f"Testing move variation in starting position...")
     print(f"Running 10 iterations to check for move diversity:")
     
     moves_chosen = {}
@@ -143,15 +202,59 @@ def test_randomization():
     diversity = len(moves_chosen)
     print(f"\nMove diversity: {diversity} different moves out of 10 iterations")
 
+def test_transposition_table():
+    """Test transposition table functionality."""
+    print("\n" + "=" * 60)
+    print("TRANSPOSITION TABLE TESTS")
+    print("=" * 60)
+    
+    engine = ZerbinettoEngine(search_depth=3, randomness_factor=0.1)
+    
+    # Test the same position multiple times to see if transposition table helps
+    board = chess.Board()
+    
+    print("Testing same position multiple times:")
+    for i in range(3):
+        start_time = time.time()
+        best_move = engine.get_best_move(board, time_limit=5.0)
+        elapsed = time.time() - start_time
+        
+        print(f"   Iteration {i+1}: {best_move.uci()} ({board.san(best_move)}) - {elapsed:.2f}s")
+
+def test_move_ordering():
+    """Test move ordering functionality."""
+    print("\n" + "=" * 60)
+    print("MOVE ORDERING TESTS")
+    print("=" * 60)
+    
+    engine = ZerbinettoEngine()
+    
+    # Test position with checks and captures
+    board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1")
+    
+    legal_moves = list(board.legal_moves)
+    ordered_moves = engine._order_moves(board, legal_moves)
+    
+    print(f"Position: {board.fen()}")
+    print(f"Legal moves: {len(legal_moves)}")
+    print(f"First 5 ordered moves:")
+    
+    for i, move in enumerate(ordered_moves[:5]):
+        print(f"  {i+1}. {move.uci()} ({board.san(move)})")
+
 def main():
     """Run all tests."""
     print("ZERBINETTO ENGINE COMPREHENSIVE TEST SUITE")
     print("=" * 60)
     
     try:
+        test_basic_functionality()
         test_move_quality()
-        test_performance() 
+        test_evaluation_functions()
+        test_performance()
         test_randomization()
+        test_transposition_table()
+        test_move_ordering()
         
         print("\n" + "=" * 60)
         print("ALL TESTS COMPLETED SUCCESSFULLY!")
