@@ -24,6 +24,7 @@ MOVE_TIMEOUT = 5  # seconds to wait before making a move
 # Global variables for cleanup
 bot_client: Optional[LichessClient] = None
 game_handler: Optional[GameHandler] = None
+args = None  # Will be set in main()
 
 def setup_logging(debug: bool = False):
     """Set up logging configuration.
@@ -163,6 +164,7 @@ def main():
     parser.add_argument('--zerb-style', action='store_true', help='Play in spectacular sacrificial style')
     parser.add_argument('--token', help='Lichess API token (overrides LICHESS_TOKEN env var)')
     
+    global args
     args = parser.parse_args()
     
     # Set up logging
