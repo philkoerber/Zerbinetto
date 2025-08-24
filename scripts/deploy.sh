@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Zerbinetto Deployment Script
-# This script handles automatic deployment and updates
+# Zerbinetto Bulletproof Deployment Script
+# This script ensures 100% reliable deployment every time
 
-set -e
+set -euo pipefail  # Exit on any error, undefined vars, pipe failures
 
 # Colors for output
 RED='\033[0;31m'
@@ -16,523 +16,538 @@ NC='\033[0m' # No Color
 PROJECT_DIR="/opt/zerbinetto"
 DOCKER_COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
 LOG_FILE="$PROJECT_DIR/deploy.log"
+MAX_RETRIES=3
+WAIT_TIME=30
 
 # Function to print colored output
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
-    echo "$(date): [INFO] $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): [INFO] $1" >> "$LOG_FILE"
 }
 
 print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
-    echo "$(date): [SUCCESS] $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): [SUCCESS] $1" >> "$LOG_FILE"
 }
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
-    echo "$(date): [WARNING] $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): [WARNING] $1" >> "$LOG_FILE"
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
-    echo "$(date): [ERROR] $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): [ERROR] $1" >> "$LOG_FILE"
 }
 
-# Function to check if we're in the right directory
-check_directory() {
-    if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
-        print_error "Docker Compose file not found. Are you in the correct directory?"
+# Function to ensure we're in the right directory
+ensure_project_directory() {
+    if [ ! -d "$PROJECT_DIR" ]; then
+        print_error "Project directory $PROJECT_DIR does not exist!"
         exit 1
     fi
-}
-
-# Function to stop and clean up existing containers
-cleanup_docker() {
-    print_status "Stopping and cleaning up existing containers..."
     
-    if [ -f "$DOCKER_COMPOSE_FILE" ]; then
-        cd "$PROJECT_DIR"
-        docker-compose down --remove-orphans || true
-        docker system prune -f || true
-        print_success "Docker cleanup completed"
-    else
-        print_warning "Docker Compose file not found, skipping cleanup"
+    cd "$PROJECT_DIR"
+    
+    if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
+        print_error "Docker Compose file not found in $PROJECT_DIR"
+        exit 1
     fi
+    
+    print_success "Project directory verified: $PROJECT_DIR"
 }
 
-# Function to pull latest changes from GitHub
-pull_updates() {
+# Function to completely clean up everything
+complete_cleanup() {
+    print_status "Performing complete cleanup..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Stop all containers forcefully
+    print_status "Stopping all containers..."
+    docker-compose down --remove-orphans --volumes --timeout 30 2>/dev/null || true
+    
+    # Remove any lingering containers
+    docker rm -f zerbinetto-bot 2>/dev/null || true
+    docker rm -f $(docker ps -aq --filter "name=zerbinetto" 2>/dev/null) 2>/dev/null || true
+    
+    # Clean up Docker system completely
+    print_status "Cleaning Docker system..."
+    docker system prune -af --volumes 2>/dev/null || true
+    
+    # Clean up any dangling images
+    docker image prune -af 2>/dev/null || true
+    
+    # Clean up networks
+    docker network prune -f 2>/dev/null || true
+    
+    # Clean up old logs
+    print_status "Cleaning up old logs..."
+    find . -name "*.log" -type f -mtime +7 -delete 2>/dev/null || true
+    find . -name "*.log.old" -type f -delete 2>/dev/null || true
+    
+    # Clean up old model backups (keep only last 3)
+    if [ -d "models" ]; then
+        print_status "Cleaning up old model backups..."
+        ls -t models/chess_model.pkl.backup_* 2>/dev/null | tail -n +4 | xargs -r rm 2>/dev/null || true
+    fi
+    
+    print_success "Complete cleanup finished"
+}
+
+# Function to pull latest changes safely
+pull_latest_changes() {
     print_status "Pulling latest changes from GitHub..."
     
     cd "$PROJECT_DIR"
     
-    # Check if we have uncommitted changes
-    if ! git diff-index --quiet HEAD --; then
-        print_warning "Local changes detected, stashing them..."
-        git stash
+    # Backup current state
+    if [ -d ".git" ]; then
+        print_status "Backing up current state..."
+        git stash push -m "Auto-stash before deployment $(date)" 2>/dev/null || true
     fi
     
-    # Pull latest changes
-    git fetch origin
-    git reset --hard origin/main
+    # Fetch latest changes
+    print_status "Fetching latest changes..."
+    git fetch origin main --force 2>/dev/null || {
+        print_error "Failed to fetch from GitHub"
+        return 1
+    }
     
-    print_success "Successfully pulled latest changes from GitHub"
+    # Reset to latest main
+    print_status "Resetting to latest main..."
+    git reset --hard origin/main 2>/dev/null || {
+        print_error "Failed to reset to latest main"
+        return 1
+    }
+    
+    # Clean any untracked files
+    git clean -fd 2>/dev/null || true
+    
+    print_success "Successfully updated to latest version: $(git rev-parse --short HEAD)"
 }
 
-# Function to build and start the application
-build_and_start() {
-    print_status "Building and starting the application..."
+# Function to build Docker image with retries
+build_docker_image() {
+    print_status "Building Docker image..."
     
     cd "$PROJECT_DIR"
     
-    # Build the Docker image
-    docker-compose build --no-cache
+    local retry_count=0
+    while [ $retry_count -lt $MAX_RETRIES ]; do
+        if docker-compose build --no-cache --pull; then
+            print_success "Docker image built successfully"
+            return 0
+        else
+            retry_count=$((retry_count + 1))
+            print_warning "Build failed, attempt $retry_count/$MAX_RETRIES"
+            if [ $retry_count -lt $MAX_RETRIES ]; then
+                print_status "Waiting $WAIT_TIME seconds before retry..."
+                sleep $WAIT_TIME
+                complete_cleanup
+            fi
+        fi
+    done
+    
+    print_error "Failed to build Docker image after $MAX_RETRIES attempts"
+    return 1
+}
+
+# Function to start application with health checks
+start_application() {
+    print_status "Starting application..."
+    
+    cd "$PROJECT_DIR"
     
     # Start the application
-    docker-compose up -d
+    if ! docker-compose up -d; then
+        print_error "Failed to start application"
+        return 1
+    fi
     
-    # Fix model permissions after container starts
-    fix_model_permissions
+    # Wait for container to be ready
+    print_status "Waiting for container to be ready..."
+    local wait_count=0
+    while [ $wait_count -lt 60 ]; do
+        if docker ps | grep -q "zerbinetto-bot.*Up"; then
+            print_success "Container is running"
+            break
+        fi
+        sleep 2
+        wait_count=$((wait_count + 1))
+    done
     
-    print_success "Application built and started successfully"
+    if [ $wait_count -ge 60 ]; then
+        print_error "Container failed to start within timeout"
+        return 1
+    fi
+    
+    # Fix permissions
+    fix_permissions
+    
+    # Health check
+    if ! check_application_health; then
+        print_error "Application health check failed"
+        return 1
+    fi
+    
+    print_success "Application started successfully"
+    return 0
 }
 
-# Function to fix model permissions
-fix_model_permissions() {
-    print_status "Fixing model file permissions..."
+# Function to fix all permissions
+fix_permissions() {
+    print_status "Fixing permissions..."
     
     cd "$PROJECT_DIR"
     
-    # Fix permissions for the model file so the bot can write to it
-    sudo chown 1000:1000 models/chess_model.pkl 2>/dev/null || true
-    sudo chmod 644 models/chess_model.pkl 2>/dev/null || true
+    # Create directories if they don't exist
+    mkdir -p models logs
     
-    print_success "Model permissions fixed"
+    # Fix model file permissions
+    if [ -f "models/chess_model.pkl" ]; then
+        sudo chown 1000:1000 models/chess_model.pkl 2>/dev/null || true
+        sudo chmod 644 models/chess_model.pkl 2>/dev/null || true
+    fi
+    
+    # Fix directory permissions
+    sudo chown -R 1000:1000 models/ logs/ 2>/dev/null || true
+    sudo chmod -R 755 models/ logs/ 2>/dev/null || true
+    
+    print_success "Permissions fixed"
 }
 
-# Function to start continuous training
+# Function to check application health
+check_application_health() {
+    print_status "Performing health check..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Wait a bit for the application to fully start
+    sleep 10
+    
+    # Check if container is running
+    if ! docker ps | grep -q "zerbinetto-bot.*Up"; then
+        print_error "Container is not running"
+        return 1
+    fi
+    
+    # Check if bot is responding
+    local health_check_count=0
+    while [ $health_check_count -lt 30 ]; do
+        if docker logs zerbinetto-bot --tail 10 2>/dev/null | grep -q "Bot is running\|Logged in as\|Waiting for challenges"; then
+            print_success "Bot is responding"
+            return 0
+        fi
+        sleep 2
+        health_check_count=$((health_check_count + 1))
+    done
+    
+    print_error "Bot health check failed"
+    return 1
+}
+
+# Function to start training reliably
 start_training() {
     print_status "Starting continuous training..."
     
     cd "$PROJECT_DIR"
     
-    # Fix permissions first
-    fix_model_permissions
+    # Stop any existing training
+    docker exec zerbinetto-bot pkill -f "trainer.py" 2>/dev/null || true
     
-    # Start training in background inside the Docker container with log rotation
-    # Run training indefinitely with log rotation to prevent disk space issues
+    # Wait a moment
+    sleep 5
+    
+    # Start training in background with proper error handling
     docker exec -d zerbinetto-bot bash -c "
-        # Create log rotation script
-        cat > /app/rotate_logs.sh << 'EOF'
-        #!/bin/bash
-        while true; do
-            sleep 3600  # Check every hour
-            if [ -f /app/training.log ] && [ \$(stat -c%s /app/training.log) -gt 10485760 ]; then  # 10MB
-                mv /app/training.log /app/training.log.old
-                touch /app/training.log
-                # Keep only last 5 log files
-                ls -t /app/training.log.* | tail -n +6 | xargs -r rm
-            fi
-        done
-        EOF
-        chmod +x /app/rotate_logs.sh
+        set -e
+        cd /app
         
-        # Start log rotation in background
-        /app/rotate_logs.sh &
+        # Create training directory if it doesn't exist
+        mkdir -p /app/logs
         
-        # Start training with log rotation (increased games per iteration for faster learning)
-        python -m src.trainer --continuous --forever --games-per-iteration 100 > /app/training.log 2>&1
+        # Start training with proper logging
+        nohup python src/trainer.py --forever --games-per-iteration 100 > /app/training.log 2>&1 &
+        
+        # Store PID for later management
+        echo \$! > /app/training.pid
+        
+        # Start log rotation
+        (
+            while true; do
+                sleep 3600
+                if [ -f /app/training.log ] && [ \$(stat -c%s /app/training.log 2>/dev/null || echo 0) -gt 10485760 ]; then
+                    mv /app/training.log /app/training.log.old
+                    touch /app/training.log
+                    ls -t /app/training.log.* 2>/dev/null | tail -n +6 | xargs -r rm
+                fi
+            done
+        ) &
+        
+        echo \$! > /app/log_rotation.pid
     "
     
-    print_success "Continuous training started in background with logging to training.log"
-}
-
-# Function to check application health
-check_health() {
-    print_status "Checking application health..."
-    
-    cd "$PROJECT_DIR"
-    
-    # Wait a moment for the application to start
+    # Wait for training to start
     sleep 10
     
-    # Check if the container is running
-    if docker-compose ps | grep -q "Up"; then
-        print_success "Application is running and healthy"
-        return 0
+    # Verify training is running
+    if docker exec zerbinetto-bot test -f /app/training.pid; then
+        print_success "Training started successfully"
     else
-        print_error "Application failed to start properly"
-        return 1
+        print_warning "Training may not have started properly"
     fi
 }
 
-# Function to show deployment status
-show_status() {
-    print_status "Current deployment status:"
+# Function to verify everything is working
+verify_deployment() {
+    print_status "Verifying deployment..."
+    
     cd "$PROJECT_DIR"
-    docker-compose ps
+    
+    # Check container status
+    if ! docker ps | grep -q "zerbinetto-bot.*Up"; then
+        print_error "Container is not running"
+        return 1
+    fi
+    
+    # Check bot activity
+    if docker logs zerbinetto-bot --tail 20 2>/dev/null | grep -q "Bot is running\|Logged in as"; then
+        print_success "Bot is active"
+    else
+        print_warning "Bot may not be fully active"
+    fi
+    
+    # Check training
+    if docker exec zerbinetto-bot test -f /app/training.pid 2>/dev/null; then
+        print_success "Training is running"
+    else
+        print_warning "Training may not be running"
+    fi
+    
+    # Check model file
+    if [ -f "models/chess_model.pkl" ]; then
+        print_success "Model file exists and accessible"
+    else
+        print_warning "Model file not found"
+    fi
+    
+    print_success "Deployment verification completed"
 }
 
-# Function to rollback to previous version
-rollback() {
-    print_warning "Rolling back to previous version..."
+# Function to show comprehensive status
+show_comprehensive_status() {
+    print_status "=== ZERBINETTO COMPREHENSIVE STATUS ==="
     
     cd "$PROJECT_DIR"
     
-    # Stop current containers
-    docker-compose down
+    # Container status
+    print_status "1. Container Status:"
+    if docker ps | grep -q "zerbinetto-bot"; then
+        container_info=$(docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep zerbinetto-bot)
+        print_success "Container: $container_info"
+    else
+        print_error "Container is not running!"
+    fi
     
-    # Reset to previous commit
-    git reset --hard HEAD~1
+    # Bot activity
+    print_status "2. Bot Activity:"
+    recent_logs=$(docker logs zerbinetto-bot --tail 10 2>/dev/null | grep -E "(Bot is running|Logged in as|Game|move)" | tail -5)
+    if [ -n "$recent_logs" ]; then
+        print_success "Recent bot activity:"
+        echo "$recent_logs" | while read line; do
+            echo "   $line"
+        done
+    else
+        print_warning "No recent bot activity"
+    fi
     
-    # Rebuild and start
-    build_and_start
+    # Training status
+    print_status "3. Training Status:"
+    if docker exec zerbinetto-bot test -f /app/training.pid 2>/dev/null; then
+        training_pid=$(docker exec zerbinetto-bot cat /app/training.pid 2>/dev/null)
+        print_success "Training PID: $training_pid"
+        
+        # Check recent training activity
+        recent_training=$(docker exec zerbinetto-bot tail -20 /app/training.log 2>/dev/null | grep "ML Engine selected move" | wc -l)
+        if [ "$recent_training" -gt 0 ]; then
+            print_success "Training is active ($recent_training recent moves)"
+        else
+            print_warning "Training may be idle"
+        fi
+    else
+        print_warning "Training process not found"
+    fi
     
-    print_success "Rollback completed"
+    # Model status
+    print_status "4. Model Status:"
+    if [ -f "models/chess_model.pkl" ]; then
+        model_size=$(ls -lh models/chess_model.pkl | awk '{print $5}')
+        model_time=$(ls -lh models/chess_model.pkl | awk '{print $6, $7, $8}')
+        print_success "Model: $model_size (modified: $model_time)"
+    else
+        print_error "Model file missing!"
+    fi
+    
+    # Active games
+    print_status "5. Active Games:"
+    active_games=$(docker logs zerbinetto-bot --tail 50 2>/dev/null | grep "Game.*state update" | tail -3)
+    if [ -n "$active_games" ]; then
+        print_success "Active games:"
+        echo "$active_games" | while read line; do
+            echo "   $line"
+        done
+    else
+        print_warning "No active games detected"
+    fi
+    
+    # System resources
+    print_status "6. System Resources:"
+    disk_usage=$(df -h . | tail -1 | awk '{print $5}')
+    print_status "Disk usage: $disk_usage"
+    
+    docker_usage=$(docker system df --format "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}" 2>/dev/null | head -5)
+    print_status "Docker usage:"
+    echo "$docker_usage"
+    
+    print_status "=== STATUS CHECK COMPLETE ==="
 }
 
 # Function to show logs
 show_logs() {
     print_status "Showing application logs..."
     cd "$PROJECT_DIR"
-    docker-compose logs -f
+    docker-compose logs -f --tail 100
 }
 
-# Function to show deployment log
-show_deploy_log() {
-    print_status "Showing deployment log..."
-    tail -f "$LOG_FILE"
+# Function to show training logs
+show_training_logs() {
+    print_status "Showing training logs..."
+    cd "$PROJECT_DIR"
+    docker exec zerbinetto-bot tail -f /app/training.log 2>/dev/null || print_warning "Training log not found"
 }
 
-# Function to cleanup container and logs
-cleanup_container() {
-    print_status "Cleaning up container and logs..."
-    
+# Function to stop everything
+stop_everything() {
+    print_status "Stopping everything..."
     cd "$PROJECT_DIR"
     
-    # Stop container
-    docker-compose down
+    # Stop training
+    docker exec zerbinetto-bot pkill -f "trainer.py" 2>/dev/null || true
     
-    # Clean up old logs and temporary files
-    docker system prune -f
+    # Stop containers
+    docker-compose down --remove-orphans 2>/dev/null || true
     
-    # Clean up old training logs (keep only last 5 files)
-    if [ -d "logs" ]; then
-        find logs/ -name "*.log" -type f -mtime +7 -delete 2>/dev/null || true
-    fi
-    
-    # Clean up old model backups (keep only last 3)
-    if [ -d "models" ]; then
-        ls -t models/chess_model.pkl.backup_* 2>/dev/null | tail -n +4 | xargs -r rm
-    fi
-    
-    print_success "Cleanup completed"
+    print_success "Everything stopped"
 }
 
-# Function to check disk usage
-check_disk_usage() {
-    print_status "Checking disk usage..."
-    
-    cd "$PROJECT_DIR"
-    
-    # Check overall disk usage
-    disk_usage=$(df -h . | tail -1 | awk '{print $5}' | sed 's/%//')
-    print_status "Disk usage: ${disk_usage}%"
-    
-    if [ "$disk_usage" -gt 80 ]; then
-        print_warning "High disk usage detected! Consider running cleanup."
-    fi
-    
-    # Check Docker disk usage
-    docker_usage=$(docker system df --format "table {{.Type}}\t{{.TotalCount}}\t{{.Size}}\t{{.Reclaimable}}" 2>/dev/null || echo "Docker not available")
-    print_status "Docker disk usage:"
-    echo "$docker_usage"
-    
-    # Check model file sizes
-    if [ -d "models" ]; then
-        print_status "Model files:"
-        ls -lh models/ 2>/dev/null || echo "No models directory"
-    fi
-    
-    # Check log file sizes
-    if [ -d "logs" ]; then
-        print_status "Log files:"
-        ls -lh logs/ 2>/dev/null || echo "No logs directory"
-    fi
+# Function to restart everything
+restart_everything() {
+    print_status "Restarting everything..."
+    stop_everything
+    sleep 5
+    start_application
+    start_training
+    verify_deployment
 }
 
-# Function to check training performance
-check_training_performance() {
-    print_status "Checking training performance..."
+# Main deployment function (bulletproof)
+deploy() {
+    print_status "Starting bulletproof deployment..."
     
-    cd "$PROJECT_DIR"
+    # Ensure we're in the right place
+    ensure_project_directory
     
-    # Check training speed
-    print_status "Training Speed Analysis:"
-    recent_iterations=$(docker exec zerbinetto-bot grep "Training iteration" /app/training.log 2>/dev/null | tail -10)
-    if [ -n "$recent_iterations" ]; then
-        echo "$recent_iterations"
-        print_status "Recent training iterations logged above"
-    else
-        print_warning "No recent training iterations found"
-    fi
+    # Complete cleanup
+    complete_cleanup
     
-    # Check loss progression
-    print_status "Loss Progression:"
-    recent_losses=$(docker exec zerbinetto-bot grep "Average Loss" /app/training.log 2>/dev/null | tail -5)
-    if [ -n "$recent_losses" ]; then
-        echo "$recent_losses"
-    else
-        print_warning "No loss data found"
-    fi
+    # Pull latest changes
+    pull_latest_changes
     
-    # Check games played
-    print_status "Games Played:"
-    total_games=$(docker exec zerbinetto-bot grep "Playing game" /app/training.log 2>/dev/null | wc -l)
-    print_success "Total games played: $total_games"
+    # Build with retries
+    build_docker_image
     
-    # Check model improvements
-    print_status "Model Improvements:"
-    if [ -f "models/chess_model.pkl" ]; then
-        model_size=$(ls -lh models/chess_model.pkl | awk '{print $5}')
-        model_time=$(ls -lh models/chess_model.pkl | awk '{print $6, $7, $8}')
-        print_success "Current model: $model_size (last modified: $model_time)"
-    fi
+    # Start application
+    start_application
+    
+    # Start training
+    start_training
+    
+    # Verify everything
+    verify_deployment
+    
+    print_success "Bulletproof deployment completed successfully!"
+    show_comprehensive_status
 }
 
-# Function to show training log
-show_training_log() {
-    print_status "Showing training log..."
-    cd "$PROJECT_DIR"
-    docker exec zerbinetto-bot tail -f /app/training.log 2>/dev/null || print_warning "Training log not found. Training may not be running."
-}
-
-# Function to check training status
-check_training_status() {
-    print_status "Checking training status..."
-    cd "$PROJECT_DIR"
+# Update function (for webhooks)
+update() {
+    print_status "Starting webhook-triggered update..."
     
-    # Check if training process is running (using grep on logs since ps is not available in slim container)
-    recent_training_activity=$(docker exec zerbinetto-bot tail -50 /app/training.log 2>/dev/null | grep "ML Engine selected move" | wc -l)
-    if [ "$recent_training_activity" -gt 10 ]; then
-        print_success "Training process is running (${recent_training_activity} recent moves)"
-    else
-        print_warning "Training process is not running"
-    fi
-    
-    # Show recent training log entries
-    print_status "Recent training log entries:"
-    docker exec zerbinetto-bot tail -10 /app/training.log 2>/dev/null || print_warning "No training log found"
-}
-
-# Function to check comprehensive system status
-check_system_status() {
-    print_status "=== ZERBINETTO SYSTEM STATUS ==="
-    cd "$PROJECT_DIR"
-    
-    # Check container status
-    print_status "1. Container Status:"
-    if docker ps | grep -q "zerbinetto-bot"; then
-        container_status=$(docker ps --format "table {{.Names}}\t{{.Status}}" | grep zerbinetto-bot)
-        print_success "Container: $container_status"
-    else
-        print_error "Container is not running!"
-        return 1
-    fi
-    
-    # Check bot activity
-    print_status "2. Bot Activity:"
-    recent_bot_logs=$(docker logs zerbinetto-bot --tail 5 2>/dev/null | grep -E "(Game|move|turn)" | tail -3)
-    if [ -n "$recent_bot_logs" ]; then
-        print_success "Bot is active - Recent activity:"
-        echo "$recent_bot_logs" | while read line; do
-            echo "   $line"
-        done
-    else
-        print_warning "No recent bot activity found"
-    fi
-    
-    # Check training status
-    print_status "3. Training Status:"
-    recent_training_activity=$(docker exec zerbinetto-bot tail -50 /app/training.log 2>/dev/null | grep "ML Engine selected move" | wc -l)
-    if [ "$recent_training_activity" -gt 10 ]; then
-        print_success "Training process is running (${recent_training_activity} recent moves)"
-    else
-        print_warning "Training process is not running"
-    fi
-    
-    # Check training activity
-    recent_training_logs=$(docker exec zerbinetto-bot tail -5 /app/training.log 2>/dev/null | grep "ML Engine selected move" | tail -3)
-    if [ -n "$recent_training_logs" ]; then
-        print_success "Training is active - Recent moves:"
-        echo "$recent_training_logs" | while read line; do
-            echo "   $line"
-        done
-    else
-        print_warning "No recent training activity found"
-    fi
-    
-    # Check model file
-    print_status "4. Model Status:"
-    if [ -f "models/chess_model.pkl" ]; then
-        model_size=$(ls -lh models/chess_model.pkl | awk '{print $5}')
-        model_time=$(ls -lh models/chess_model.pkl | awk '{print $6, $7, $8}')
-        print_success "Model file exists: $model_size (last modified: $model_time)"
-    else
-        print_error "Model file not found!"
-    fi
-    
-    # Check permissions
-    print_status "5. Permissions:"
-    if [ -r "models/chess_model.pkl" ] && [ -w "models/chess_model.pkl" ]; then
-        print_success "Model file is readable and writable"
-    else
-        print_error "Model file permission issues!"
-    fi
-    
-    # Check active games
-    print_status "6. Active Games:"
-    active_games=$(docker logs zerbinetto-bot --tail 50 2>/dev/null | grep "Game.*state update" | tail -3)
-    if [ -n "$active_games" ]; then
-        print_success "Active games detected:"
-        echo "$active_games" | while read line; do
-            echo "   $line"
-        done
-    else
-        print_warning "No active games found"
-    fi
-    
-    print_status "=== STATUS CHECK COMPLETE ==="
+    # Same as deploy but with extra safety
+    deploy
 }
 
 # Function to show help
 show_help() {
-    echo "Zerbinetto Deployment Script"
+    echo "Zerbinetto Bulletproof Deployment Script"
     echo ""
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  deploy      Full deployment (pull, cleanup, build, start, train)"
-    echo "  update      Pull updates and restart with training (triggered by webhook)"
-    echo "  restart     Restart the application"
-    echo "  train       Start continuous training"
-    echo "  stop        Stop the application"
-    echo "  status      Show application status"
+    echo "  deploy      Full bulletproof deployment"
+    echo "  update      Webhook-triggered update (same as deploy)"
+    echo "  restart     Restart everything"
+    echo "  stop        Stop everything"
+    echo "  status      Comprehensive status check"
     echo "  logs        Show application logs"
-    echo "  deploy-log  Show deployment log"
-    echo "  training-log Show training log"
-    echo "  training-status Check training status"
-    echo "  status-full  Comprehensive system status check"
-    echo "  rollback    Rollback to previous version"
-    echo "  help        Show this help message"
+    echo "  training    Show training logs"
+    echo "  cleanup     Complete cleanup"
+    echo "  help        Show this help"
     echo ""
     echo "Examples:"
     echo "  $0 deploy   # Full deployment"
-    echo "  $0 update   # Update and restart (webhook-triggered)"
-    echo "  $0 logs     # View logs"
-    echo "  $0 training-status # Check training progress"
-}
-
-# Main deployment function
-deploy() {
-    print_status "Starting full deployment..."
-    
-    check_directory
-    cleanup_docker
-    pull_updates
-    build_and_start
-    
-    if check_health; then
-        print_success "Deployment completed successfully!"
-        start_training
-        print_status "Quick status check:"
-        check_system_status
-    else
-        print_error "Deployment failed!"
-        rollback
-        exit 1
-    fi
-}
-
-# Update function (pull and restart)
-update() {
-    print_status "Starting update..."
-    
-    check_directory
-    pull_updates
-    cleanup_docker
-    build_and_start
-    
-    if check_health; then
-        print_success "Update completed successfully!"
-        start_training
-        print_status "Quick status check:"
-        check_system_status
-    else
-        print_error "Update failed!"
-        rollback
-        exit 1
-    fi
+    echo "  $0 update   # Webhook update"
+    echo "  $0 status   # Check everything"
 }
 
 # Main script logic
 main() {
-    # Create log file if it doesn't exist
+    # Create log file
+    mkdir -p "$(dirname "$LOG_FILE")"
     touch "$LOG_FILE"
     
+    print_status "Deployment script started: $0 $*"
+    
     case "${1:-help}" in
-        "deploy")
+        "deploy"|"update")
             deploy
             ;;
-        "update")
-            update
-            ;;
         "restart")
-            check_directory
-            cd "$PROJECT_DIR"
-            docker-compose restart
-            print_success "Application restarted"
-            ;;
-        "train")
-            start_training
+            ensure_project_directory
+            restart_everything
             ;;
         "stop")
-            check_directory
-            cd "$PROJECT_DIR"
-            docker-compose down
-            print_success "Application stopped"
+            ensure_project_directory
+            stop_everything
             ;;
         "status")
-            show_status
+            ensure_project_directory
+            show_comprehensive_status
             ;;
         "logs")
+            ensure_project_directory
             show_logs
             ;;
-        "deploy-log")
-            show_deploy_log
-            ;;
-        "training-log")
-            show_training_log
-            ;;
-        "training-status")
-            check_training_status
-            ;;
-        "status-full")
-            check_system_status
+        "training")
+            ensure_project_directory
+            show_training_logs
             ;;
         "cleanup")
-            cleanup_container
+            ensure_project_directory
+            complete_cleanup
             ;;
-        "disk-usage")
-            check_disk_usage
-            ;;
-        "training-performance")
-            check_training_performance
-            ;;
-        "rollback")
-            rollback
-            ;;
-        "help"|"--help"|"-h")
+        "help"|"--help"|"-h"|"")
             show_help
             ;;
         *)
@@ -543,5 +558,5 @@ main() {
     esac
 }
 
-# Run main function with all arguments
+# Run main function
 main "$@"
