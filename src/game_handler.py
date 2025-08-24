@@ -21,18 +21,19 @@ logger = logging.getLogger(__name__)
 class GameHandler:
     """Handles chess game logic and move generation."""
     
-    def __init__(self, lichess_client):
+    def __init__(self, lichess_client, zerb_style: bool = False):
         """Initialize the game handler.
         
         Args:
             lichess_client: LichessClient instance for making moves
+            zerb_style: Whether to play in spectacular sacrificial style
         """
         self.lichess_client = lichess_client
         self.active_games: Dict[str, Dict] = {}
         self.game_tasks: Dict[str, asyncio.Task] = {}
         
-        # Initialize ML engine
-        self.ml_engine = MLEngine()
+        # Initialize ML engine with Zerb-style option
+        self.ml_engine = MLEngine(zerb_style=zerb_style)
         
         # Configuration
         self.move_delay = 1.0  # Delay before making a move (seconds)

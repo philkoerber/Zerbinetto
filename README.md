@@ -17,6 +17,9 @@ python src/bot.py
 
 # Start with MCTS enabled for stronger play
 python src/bot.py --use-mcts
+
+# Start in spectacular sacrificial style
+python src/bot.py --zerb-style
 ```
 
 ## 🎯 Key Features
@@ -288,6 +291,46 @@ class MCTSWrapper:
 - **Exploration**: Tries different move sequences
 - **Exploitation**: Focuses on promising lines
 - **Stronger Play**: Significantly improves playing strength
+
+### 🎭 Zerb-Style Spectacular Play
+
+The bot can play in spectacular sacrificial style, favoring tactical complications and attacking chances:
+
+```python
+# Zerb-style bonuses
+zerb_bonus = 0.0
+
+# Bonus for captures (especially sacrifices)
+if board.is_capture(move):
+    bonus += 0.1
+    if self._is_piece_sacrifice(board, move):
+        bonus += 0.3  # Extra bonus for sacrifices
+
+# Bonus for checks
+if board.gives_check(move):
+    bonus += 0.15
+
+# Bonus for attacking moves
+if self._is_attacking_move(board, move):
+    bonus += 0.1
+
+# Bonus for tactical complications
+if self._creates_tactical_complications(board, move):
+    bonus += 0.2
+```
+
+**Zerb-Style Features:**
+- **🎯 Sacrificial Play**: Favors piece sacrifices for attacking chances
+- **⚡ Tactical Complications**: Creates complex, tactical positions
+- **🔥 Initiative**: Maintains attacking pressure
+- **🎪 Spectacular Moves**: Prefers moves that create fireworks
+- **🚫 Anti-Defensive**: Avoids overly defensive play
+
+**Usage:**
+```bash
+# Start bot in Zerb-style mode
+python src/bot.py --zerb-style
+```
 
 ## 🎮 Usage
 

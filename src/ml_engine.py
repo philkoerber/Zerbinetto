@@ -300,18 +300,20 @@ class SimpleNeuralNetwork:
 class MLEngine:
     """Machine learning-based chess engine."""
     
-    def __init__(self, model_path: str = "models/chess_model.pkl", use_mcts: bool = False):
+    def __init__(self, model_path: str = "models/chess_model.pkl", use_mcts: bool = False, zerb_style: bool = False):
         """Initialize the ML engine.
         
         Args:
             model_path: Path to the trained model file
             use_mcts: Whether to use MCTS wrapper for move selection
+            zerb_style: Whether to play in spectacular sacrificial style
         """
         self.model_path = model_path
         self.position_encoder = ChessPositionEncoder()
         self.model = None
         self.use_mcts = use_mcts
         self.mcts_wrapper = None
+        self.zerb_style = zerb_style
         
         # Load the model at initialization
         self._load_model()
@@ -360,6 +362,11 @@ class MLEngine:
         if not legal_moves:
             raise ValueError("No legal moves available")
         
+        # Always use Zerb-style spectacular play
+        return self._choose_zerb_style_move(board, legal_moves)
+    
+    def _choose_standard_move(self, board: chess.Board, legal_moves: list) -> chess.Move:
+        """Choose move using standard evaluation."""
         # Evaluate all legal moves
         move_scores = []
         for move in legal_moves:
@@ -390,6 +397,192 @@ class MLEngine:
         logger.info(f"ML Engine selected move: {best_move.uci()} (score: {best_score:.3f})")
         
         return best_move
+    
+    def _choose_zerb_style_move(self, board: chess.Board, legal_moves: list) -> chess.Move:
+        """Choose move in spectacular sacrificial style."""
+        move_scores = []
+        
+        for move in legal_moves:
+            # Make the move temporarily
+            board.push(move)
+            
+            # Get base model evaluation
+            position_features = self.position_encoder.encode_position(board)
+            base_score = self.model.predict(position_features)
+            
+            # Calculate Zerb-style bonuses
+            zerb_bonus = self._calculate_zerb_bonus(board, move)
+            
+            # Apply Zerb-style modifications
+            if board.turn == chess.WHITE:
+                zerb_score = base_score + zerb_bonus
+            else:
+                zerb_score = base_score - zerb_bonus  # Black perspective
+            
+            # Undo the move
+            board.pop()
+            
+            move_scores.append((move, zerb_score, base_score, zerb_bonus))
+        
+        # Sort by Zerb-style score
+        if board.turn == chess.WHITE:
+            move_scores.sort(key=lambda x: x[1], reverse=True)
+        else:
+            move_scores.sort(key=lambda x: x[1], reverse=False)
+        
+        best_move, zerb_score, base_score, zerb_bonus = move_scores[0]
+        
+        # Log the spectacular choice
+        if abs(zerb_bonus) > 0.1:  # Significant Zerb-style influence
+            logger.info(f"Zerb-style move: {best_move.uci()} (base: {base_score:.3f}, zerb_bonus: {zerb_bonus:.3f}, final: {zerb_score:.3f})")
+        else:
+            logger.info(f"ML Engine selected move: {best_move.uci()} (score: {zerb_score:.3f})")
+        
+        return best_move
+    
+    def _calculate_zerb_bonus(self, board: chess.Board, move: chess.Move) -> float:
+        """Calculate Zerb-style bonus for a move."""
+        bonus = 0.0
+        
+        # Bonus for captures (especially sacrifices)
+        if board.is_capture(move):
+            bonus += 0.1
+            # Extra bonus for piece sacrifices
+            if self._is_piece_sacrifice(board, move):
+                bonus += 0.3
+        
+        # Bonus for checks
+        if board.gives_check(move):
+            bonus += 0.15
+        
+        # Bonus for attacking moves (moves that attack enemy pieces)
+        if self._is_attacking_move(board, move):
+            bonus += 0.1
+        
+        # Bonus for moves that create tactical complications
+        if self._creates_tactical_complications(board, move):
+            bonus += 0.2
+        
+        # Bonus for moves that maintain initiative
+        if self._maintains_initiative(board, move):
+            bonus += 0.1
+        
+        # Bonus for moves that open lines for attack
+        if self._opens_attack_lines(board, move):
+            bonus += 0.15
+        
+        # Penalty for overly defensive moves
+        if self._is_overly_defensive(board, move):
+            bonus -= 0.1
+        
+        return bonus
+    
+    def _is_piece_sacrifice(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move is a piece sacrifice."""
+        if not board.is_capture(move):
+            return False
+        
+        # Get piece values
+        piece_values = {
+            chess.PAWN: 1,
+            chess.KNIGHT: 3,
+            chess.BISHOP: 3,
+            chess.ROOK: 5,
+            chess.QUEEN: 9,
+            chess.KING: 100
+        }
+        
+        # Check if we're giving up more material than we're taking
+        captured_piece = board.piece_at(move.to_square)
+        moving_piece = board.piece_at(move.from_square)
+        
+        if captured_piece and moving_piece:
+            captured_value = piece_values.get(captured_piece.piece_type, 0)
+            moving_value = piece_values.get(moving_piece.piece_type, 0)
+            
+            # It's a sacrifice if we're giving up more material
+            return moving_value > captured_value
+        
+        return False
+    
+    def _is_attacking_move(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move attacks enemy pieces."""
+        # Make the move temporarily
+        board.push(move)
+        
+        # Check if the moved piece attacks enemy pieces
+        attacks = board.attacks(move.to_square)
+        enemy_pieces = []
+        
+        for square in attacks:
+            piece = board.piece_at(square)
+            if piece and piece.color != board.turn:
+                enemy_pieces.append(piece)
+        
+        # Undo the move
+        board.pop()
+        
+        return len(enemy_pieces) > 0
+    
+    def _creates_tactical_complications(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move creates tactical complications."""
+        # Make the move temporarily
+        board.push(move)
+        
+        # Count legal moves for opponent (more moves = more complications)
+        opponent_moves = len(list(board.legal_moves))
+        
+        # Check if position has many captures available
+        captures = [m for m in board.legal_moves if board.is_capture(m)]
+        
+        # Undo the move
+        board.pop()
+        
+        # More complications if opponent has many options and many captures
+        return opponent_moves > 20 and len(captures) > 3
+    
+    def _maintains_initiative(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move maintains the initiative."""
+        # Make the move temporarily
+        board.push(move)
+        
+        # Check if we still have attacking chances
+        our_attacks = 0
+        for square in chess.SQUARES:
+            piece = board.piece_at(square)
+            if piece and piece.color == board.turn:
+                attacks = board.attacks(square)
+                our_attacks += len(attacks)
+        
+        # Undo the move
+        board.pop()
+        
+        return our_attacks > 10
+    
+    def _opens_attack_lines(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move opens lines for attack."""
+        # Check if move opens files or diagonals
+        from_file = chess.square_file(move.from_square)
+        to_file = chess.square_file(move.to_square)
+        from_rank = chess.square_rank(move.from_square)
+        to_rank = chess.square_rank(move.to_square)
+        
+        # Moving to different file/rank might open lines
+        return from_file != to_file or from_rank != to_rank
+    
+    def _is_overly_defensive(self, board: chess.Board, move: chess.Move) -> bool:
+        """Check if a move is overly defensive."""
+        # Moving pieces backwards is often defensive
+        if board.turn == chess.WHITE:
+            # White moving pieces backwards
+            if chess.square_rank(move.to_square) < chess.square_rank(move.from_square):
+                return True
+        else:
+            # Black moving pieces backwards
+            if chess.square_rank(move.to_square) > chess.square_rank(move.from_square):
+                return True
+        
+        return False
     
     def evaluate_position(self, board: chess.Board) -> float:
         """Evaluate a position using the ML model.

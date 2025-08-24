@@ -103,7 +103,7 @@ async def main_loop():
     try:
         # Initialize client and game handler
         bot_client = LichessClient()
-        game_handler = GameHandler(bot_client)
+        game_handler = GameHandler(bot_client, zerb_style=args.zerb_style)
         
         # Get account info
         account_info = bot_client.get_account_info()
@@ -160,6 +160,7 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Lichess Bot - Accepts challenges and plays random moves')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--zerb-style', action='store_true', help='Play in spectacular sacrificial style')
     parser.add_argument('--token', help='Lichess API token (overrides LICHESS_TOKEN env var)')
     
     args = parser.parse_args()
