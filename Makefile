@@ -1,4 +1,4 @@
-.PHONY: help build dev prod stop logs test upgrade clean
+.PHONY: help build dev prod stop logs test test-ml clean
 
 # Default target
 help:
@@ -10,7 +10,7 @@ help:
 	@echo "  make stop     - Stop the bot"
 	@echo "  make logs     - View bot logs"
 	@echo "  make test     - Test bot setup"
-	@echo "  make upgrade  - Upgrade bot account"
+	@echo "  make test-ml  - Test ML engine"
 	@echo "  make clean    - Clean up Docker resources"
 	@echo "  make help     - Show this help message"
 
@@ -45,12 +45,12 @@ logs:
 # Test setup
 test: build
 	@echo "Testing bot setup..."
-	docker-compose run --rm lichess-bot python scripts/test_setup.py
+	docker-compose run --rm lichess-bot python -m pytest tests/ -v
 
-# Upgrade bot account
-upgrade: build
-	@echo "Upgrading bot account..."
-	docker-compose run --rm lichess-bot python scripts/upgrade_to_bot.py
+# Test ML engine
+test-ml: build
+	@echo "Testing ML engine..."
+	docker-compose run --rm lichess-bot python tests/test_ml_engine.py
 
 # Clean up Docker resources
 clean:

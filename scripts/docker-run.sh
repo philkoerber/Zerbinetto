@@ -103,13 +103,13 @@ view_logs() {
 # Function to test the setup
 test_setup() {
     print_status "Testing bot setup..."
-    docker-compose run --rm lichess-bot python scripts/test_setup.py
+    docker-compose run --rm lichess-bot python -m pytest tests/ -v
 }
 
-# Function to upgrade bot account
-upgrade_bot() {
-    print_status "Upgrading bot account..."
-    docker-compose run --rm lichess-bot python scripts/upgrade_to_bot.py
+# Function to test ML engine
+test_ml() {
+    print_status "Testing ML engine..."
+    docker-compose run --rm lichess-bot python tests/test_ml_engine.py
 }
 
 # Function to show status
@@ -131,7 +131,7 @@ show_help() {
     echo "  logs        View bot logs"
     echo "  build       Build Docker image"
     echo "  test        Test bot setup"
-    echo "  upgrade     Upgrade bot account"
+    echo "  test-ml     Test ML engine"
     echo "  status      Show bot status"
     echo "  help        Show this help message"
     echo ""
@@ -168,9 +168,9 @@ main() {
             build_image
             test_setup
             ;;
-        "upgrade")
+        "test-ml")
             build_image
-            upgrade_bot
+            test_ml
             ;;
         "status")
             show_status

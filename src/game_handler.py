@@ -14,8 +14,7 @@ import aiohttp
 import chess
 import chess.engine
 
-from zerbinetto_engine import ZerbinettoEngine
-from zerbinetto_config import SEARCH_DEPTH, RANDOMNESS_FACTOR, ENGINE_SETTINGS
+from .ml_engine import MLEngine
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +31,12 @@ class GameHandler:
         self.active_games: Dict[str, Dict] = {}
         self.game_tasks: Dict[str, asyncio.Task] = {}
         
-        # Initialize Zerbinetto engine
-        self.zerbinetto_engine = ZerbinettoEngine(search_depth=SEARCH_DEPTH, randomness_factor=RANDOMNESS_FACTOR)
+        # Initialize ML engine
+        self.ml_engine = MLEngine()
         
         # Configuration
-        self.move_delay = ENGINE_SETTINGS['move_delay']
-        self.max_move_time = ENGINE_SETTINGS['max_move_time']
+        self.move_delay = 1.0  # Delay before making a move (seconds)
+        self.max_move_time = 8.0  # Maximum time to think about a move (seconds)
     
     async def handle_game_start(self, game_data: Dict):
         """Handle when a game starts.
@@ -63,7 +62,7 @@ class GameHandler:
         }
         
         # Store game ID for future reference
-        self.zerbinetto_engine.game_id = game_id
+        # self.ml_engine.game_id = game_id  # ML engine doesn't need game_id
         
         logger.info(f"We are playing as {our_color} in game {game_id}")
         
@@ -431,9 +430,9 @@ class GameHandler:
             # Add a small delay to avoid making moves too quickly
             await asyncio.sleep(self.move_delay)
             
-            # Generate a Zerbinetto-style move
-            logger.info(f"Generating Zerbinetto-style move for game {game_id}")
-            move = await self._generate_zerbinetto_move(game_data)
+            # Generate an ML-based move
+            logger.info(f"Generating ML-based move for game {game_id}")
+            move = await self._generate_ml_move(game_data)
             
             if move:
                 logger.info(f"Generated move {move} for game {game_id}, sending to Lichess...")
@@ -445,8 +444,8 @@ class GameHandler:
         except Exception as e:
             logger.error(f"Error making move in game {game_id}: {e}", exc_info=True)
     
-    async def _generate_zerbinetto_move(self, game_data: Dict) -> Optional[str]:
-        """Generate a Zerbinetto-style tactical move using the Zerbinetto engine.
+    async def _generate_ml_move(self, game_data: Dict) -> Optional[str]:
+        """Generate a move using the ML engine.
         
         Args:
             game_data: Current game state
@@ -454,7 +453,7 @@ class GameHandler:
         Returns:
             A legal move in UCI format, or None if no moves available
         """
-        logger.info("Generating Zerbinetto-style tactical move...")
+        logger.info("Generating ML-based move...")
         
         # Get the current FEN position - handle both direct and nested game data
         fen = game_data.get('fen', '')
@@ -492,30 +491,21 @@ class GameHandler:
             # Create a chess board from the FEN position
             board = chess.Board(fen)
             
-            # Check if we need to adjust for our color
-            game_id = game_data.get('id') or game_data.get('game', {}).get('id')
-            if game_id and game_id in self.active_games:
-                our_color = self.active_games[game_id].get('our_color')
-                if our_color == 'black':
-                    # If we're black, we need to flip the board perspective
-                    # The Tal engine evaluates from white's perspective
-                    pass  # The engine will handle this automatically
-            
-            # Get the best move from Zerbinetto engine
-            best_move = self.zerbinetto_engine.get_best_move(board, time_limit=self.max_move_time)
+            # Get the best move from ML engine
+            best_move = self.ml_engine.choose_move(board)
             
             if best_move:
                 move_uci = best_move.uci()
-                logger.info(f"Zerbinetto engine selected move: {move_uci}")
+                logger.info(f"ML engine selected move: {move_uci}")
                 return move_uci
             else:
-                logger.warning("Zerbinetto engine returned no move")
+                logger.warning("ML engine returned no move")
                 return None
             
         except Exception as e:
-            logger.error(f"Error generating Zerbinetto move: {e}", exc_info=True)
-            # Fallback to random move if Zerbinetto engine fails
-            logger.info("Falling back to random move due to Zerbinetto engine error")
+            logger.error(f"Error generating ML move: {e}", exc_info=True)
+            # Fallback to random move if ML engine fails
+            logger.info("Falling back to random move due to ML engine error")
             return await self._generate_random_move_fallback(game_data)
     
     async def _generate_random_move_fallback(self, game_data: Dict) -> Optional[str]:

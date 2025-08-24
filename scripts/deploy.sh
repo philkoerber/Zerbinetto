@@ -94,6 +94,18 @@ build_and_start() {
     print_success "Application built and started successfully"
 }
 
+# Function to start continuous training
+start_training() {
+    print_status "Starting continuous training..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Start training in background
+    nohup python3 -m src.trainer --continuous --iterations 1000 --games-per-iteration 50 > training.log 2>&1 &
+    
+    print_success "Continuous training started in background"
+}
+
 # Function to check application health
 check_health() {
     print_status "Checking application health..."
@@ -158,9 +170,10 @@ show_help() {
     echo "Usage: $0 [COMMAND]"
     echo ""
     echo "Commands:"
-    echo "  deploy      Full deployment (pull, cleanup, build, start)"
+    echo "  deploy      Full deployment (pull, cleanup, build, start, train)"
     echo "  update      Pull updates and restart (triggered by webhook)"
     echo "  restart     Restart the application"
+    echo "  train       Start continuous training"
     echo "  stop        Stop the application"
     echo "  status      Show application status"
     echo "  logs        Show application logs"
@@ -185,6 +198,7 @@ deploy() {
     
     if check_health; then
         print_success "Deployment completed successfully!"
+        start_training
         show_status
     else
         print_error "Deployment failed!"
@@ -229,6 +243,9 @@ main() {
             cd "$PROJECT_DIR"
             docker-compose restart
             print_success "Application restarted"
+            ;;
+        "train")
+            start_training
             ;;
         "stop")
             check_directory

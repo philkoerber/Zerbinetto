@@ -13,8 +13,8 @@ import signal
 import sys
 from typing import Optional
 
-from lichess_client import LichessClient
-from game_handler import GameHandler
+from .lichess_client import LichessClient
+from .game_handler import GameHandler
 
 # Configuration
 LOG_LEVEL = logging.INFO
