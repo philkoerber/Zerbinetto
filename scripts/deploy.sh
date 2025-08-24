@@ -67,9 +67,16 @@ complete_cleanup() {
     print_status "Stopping all containers..."
     docker-compose down --remove-orphans --volumes --timeout 30 2>/dev/null || true
     
-    # Remove any lingering containers
+    # Force remove any containers with zerbinetto in the name
+    print_status "Force removing any lingering containers..."
+    docker ps -aq --filter "name=zerbinetto" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    docker ps -aq --filter "name=zerbinetto-bot" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    
+    # Remove any container with the exact name
     docker rm -f zerbinetto-bot 2>/dev/null || true
-    docker rm -f $(docker ps -aq --filter "name=zerbinetto" 2>/dev/null) 2>/dev/null || true
+    
+    # Wait a moment for cleanup
+    sleep 2
     
     # Clean up Docker system completely
     print_status "Cleaning Docker system..."
