@@ -56,3 +56,10 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# ML Models (trained on VM)
+models/
+*.pkl
+*.h5
+*.pt
+*.pth
