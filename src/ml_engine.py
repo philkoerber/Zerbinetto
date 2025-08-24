@@ -410,8 +410,10 @@ class MLEngine:
             position_features = self.position_encoder.encode_position(board)
             base_score = self.model.predict(position_features)
             
-            # Calculate Zerb-style bonuses
+            # Calculate Zerb-style bonuses (pass the original board state)
+            board.pop()  # Undo move first
             zerb_bonus = self._calculate_zerb_bonus(board, move)
+            board.push(move)  # Make move again for final evaluation
             
             # Apply Zerb-style modifications
             if board.turn == chess.WHITE:
