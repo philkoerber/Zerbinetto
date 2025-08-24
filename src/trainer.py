@@ -58,10 +58,10 @@ class SelfPlayTrainer:
         self.position_encoder = ChessPositionEncoder()
         
         # Training parameters
-        self.games_per_iteration = 100
+        self.games_per_iteration = 100  # Increased from 50 for more training data
         self.max_moves_per_game = 200
         self.learning_rate = 0.001
-        self.batch_size = 32
+        self.batch_size = 64  # Increased from 32 for better efficiency
         
         # Create models directory
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
@@ -186,18 +186,39 @@ class SelfPlayTrainer:
                 # Compute gradients (simplified)
                 error = predictions.flatten() - batch_y
                 
-                # Backpropagation (simplified)
-                # This is a very basic implementation - in practice you'd want to use a proper framework
-                # For now, we'll do a simple weight update
-                
-                # Update weights (simplified gradient descent)
+                # Backpropagation with Adam optimizer
+                # Compute gradients for each sample in batch
                 for j in range(len(batch_X)):
-                    # Simple weight update - in practice you'd compute proper gradients
-                    # This is just a placeholder for the actual training logic
-                    pass
+                    X_sample = batch_X[j:j+1]
+                    y_sample = batch_y[j:j+1]
+                    
+                    # Forward pass
+                    z1 = np.dot(X_sample, self.engine.model.W1) + self.engine.model.b1
+                    a1 = np.maximum(0, z1)  # ReLU
+                    z2 = np.dot(a1, self.engine.model.W2) + self.engine.model.b2
+                    
+                    # Compute gradients
+                    error = z2 - y_sample
+                    
+                    # Gradients for output layer
+                    grad_W2 = np.dot(a1.T, error)
+                    grad_b2 = np.sum(error, axis=0)
+                    
+                    # Gradients for hidden layer
+                    grad_a1 = np.dot(error, self.engine.model.W2.T)
+                    grad_z1 = grad_a1 * (z1 > 0)  # ReLU gradient
+                    grad_W1 = np.dot(X_sample.T, grad_z1)
+                    grad_b1 = np.sum(grad_z1, axis=0)
+                    
+                    # Update weights using Adam optimizer
+                    self.engine.model.update_with_adam(grad_W1, grad_b1, grad_W2, grad_b2)
             
-            avg_loss = total_loss / (len(X) // self.batch_size)
-            logger.info(f"Epoch {epoch + 1}/{num_epochs}, Average Loss: {avg_loss:.6f}")
+                    avg_loss = total_loss / (len(X) // self.batch_size)
+        logger.info(f"Epoch {epoch + 1}/{num_epochs}, Average Loss: {avg_loss:.6f}")
+        
+        # Log training progress every 5 epochs
+        if (epoch + 1) % 5 == 0:
+            logger.info(f"Training Progress: {len(X)} samples processed, Loss: {avg_loss:.6f}")
         
         # Save the trained model
         self.engine.save_model()

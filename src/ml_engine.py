@@ -122,6 +122,24 @@ class SimpleNeuralNetwork:
         self.b1 = np.zeros(hidden_size)
         self.W2 = np.random.randn(hidden_size, output_size) * np.sqrt(2.0 / hidden_size)
         self.b2 = np.zeros(output_size)
+        
+        # Adam optimizer parameters
+        self.learning_rate = 0.001
+        self.beta1 = 0.9
+        self.beta2 = 0.999
+        self.epsilon = 1e-8
+        
+        # Initialize Adam momentum and variance
+        self.m_W1 = np.zeros_like(self.W1)
+        self.v_W1 = np.zeros_like(self.W1)
+        self.m_b1 = np.zeros_like(self.b1)
+        self.v_b1 = np.zeros_like(self.b1)
+        self.m_W2 = np.zeros_like(self.W2)
+        self.v_W2 = np.zeros_like(self.W2)
+        self.m_b2 = np.zeros_like(self.b2)
+        self.v_b2 = np.zeros_like(self.b2)
+        
+        self.t = 0  # Time step for Adam
     
     def forward(self, X: np.ndarray) -> np.ndarray:
         """Forward pass through the network.
@@ -151,6 +169,61 @@ class SimpleNeuralNetwork:
         """
         return float(self.forward(X)[0])
     
+    def update_with_adam(self, gradients_W1, gradients_b1, gradients_W2, gradients_b2):
+        """Update weights using Adam optimizer.
+        
+        Args:
+            gradients_W1: Gradients for W1
+            gradients_b1: Gradients for b1
+            gradients_W2: Gradients for W2
+            gradients_b2: Gradients for b2
+        """
+        self.t += 1
+        
+        # Update momentum and variance for W1
+        self.m_W1 = self.beta1 * self.m_W1 + (1 - self.beta1) * gradients_W1
+        self.v_W1 = self.beta2 * self.v_W1 + (1 - self.beta2) * (gradients_W1 ** 2)
+        
+        # Bias correction
+        m_W1_corrected = self.m_W1 / (1 - self.beta1 ** self.t)
+        v_W1_corrected = self.v_W1 / (1 - self.beta2 ** self.t)
+        
+        # Update W1
+        self.W1 -= self.learning_rate * m_W1_corrected / (np.sqrt(v_W1_corrected) + self.epsilon)
+        
+        # Update momentum and variance for b1
+        self.m_b1 = self.beta1 * self.m_b1 + (1 - self.beta1) * gradients_b1
+        self.v_b1 = self.beta2 * self.v_b1 + (1 - self.beta2) * (gradients_b1 ** 2)
+        
+        # Bias correction
+        m_b1_corrected = self.m_b1 / (1 - self.beta1 ** self.t)
+        v_b1_corrected = self.v_b1 / (1 - self.beta2 ** self.t)
+        
+        # Update b1
+        self.b1 -= self.learning_rate * m_b1_corrected / (np.sqrt(v_b1_corrected) + self.epsilon)
+        
+        # Update momentum and variance for W2
+        self.m_W2 = self.beta1 * self.m_W2 + (1 - self.beta1) * gradients_W2
+        self.v_W2 = self.beta2 * self.v_W2 + (1 - self.beta2) * (gradients_W2 ** 2)
+        
+        # Bias correction
+        m_W2_corrected = self.m_W2 / (1 - self.beta1 ** self.t)
+        v_W2_corrected = self.v_W2 / (1 - self.beta2 ** self.t)
+        
+        # Update W2
+        self.W2 -= self.learning_rate * m_W2_corrected / (np.sqrt(v_W2_corrected) + self.epsilon)
+        
+        # Update momentum and variance for b2
+        self.m_b2 = self.beta1 * self.m_b2 + (1 - self.beta1) * gradients_b2
+        self.v_b2 = self.beta2 * self.v_b2 + (1 - self.beta2) * (gradients_b2 ** 2)
+        
+        # Bias correction
+        m_b2_corrected = self.m_b2 / (1 - self.beta1 ** self.t)
+        v_b2_corrected = self.v_b2 / (1 - self.beta2 ** self.t)
+        
+        # Update b2
+        self.b2 -= self.learning_rate * m_b2_corrected / (np.sqrt(v_b2_corrected) + self.epsilon)
+    
     def save(self, filepath: str):
         """Save the model to disk.
         
@@ -164,7 +237,17 @@ class SimpleNeuralNetwork:
             'b2': self.b2,
             'input_size': self.input_size,
             'hidden_size': self.hidden_size,
-            'output_size': self.output_size
+            'output_size': self.output_size,
+            # Adam optimizer state
+            'm_W1': self.m_W1,
+            'v_W1': self.v_W1,
+            'm_b1': self.m_b1,
+            'v_b1': self.v_b1,
+            'm_W2': self.m_W2,
+            'v_W2': self.v_W2,
+            'm_b2': self.m_b2,
+            'v_b2': self.v_b2,
+            't': self.t
         }
         
         with open(filepath, 'wb') as f:
@@ -188,6 +271,29 @@ class SimpleNeuralNetwork:
         self.input_size = model_data['input_size']
         self.hidden_size = model_data['hidden_size']
         self.output_size = model_data['output_size']
+        
+        # Load Adam optimizer state if available
+        if 'm_W1' in model_data:
+            self.m_W1 = model_data['m_W1']
+            self.v_W1 = model_data['v_W1']
+            self.m_b1 = model_data['m_b1']
+            self.v_b1 = model_data['v_b1']
+            self.m_W2 = model_data['m_W2']
+            self.v_W2 = model_data['v_W2']
+            self.m_b2 = model_data['m_b2']
+            self.v_b2 = model_data['v_b2']
+            self.t = model_data['t']
+        else:
+            # Initialize Adam state for old models
+            self.m_W1 = np.zeros_like(self.W1)
+            self.v_W1 = np.zeros_like(self.W1)
+            self.m_b1 = np.zeros_like(self.b1)
+            self.v_b1 = np.zeros_like(self.b1)
+            self.m_W2 = np.zeros_like(self.W2)
+            self.v_W2 = np.zeros_like(self.W2)
+            self.m_b2 = np.zeros_like(self.b2)
+            self.v_b2 = np.zeros_like(self.b2)
+            self.t = 0
         
         logger.info(f"Model loaded from {filepath}")
 

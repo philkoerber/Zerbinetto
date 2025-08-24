@@ -140,8 +140,8 @@ start_training() {
         # Start log rotation in background
         /app/rotate_logs.sh &
         
-        # Start training with log rotation
-        python -m src.trainer --continuous --forever --games-per-iteration 50 > /app/training.log 2>&1
+        # Start training with log rotation (increased games per iteration for faster learning)
+        python -m src.trainer --continuous --forever --games-per-iteration 100 > /app/training.log 2>&1
     "
     
     print_success "Continuous training started in background with logging to training.log"
@@ -258,6 +258,45 @@ check_disk_usage() {
     if [ -d "logs" ]; then
         print_status "Log files:"
         ls -lh logs/ 2>/dev/null || echo "No logs directory"
+    fi
+}
+
+# Function to check training performance
+check_training_performance() {
+    print_status "Checking training performance..."
+    
+    cd "$PROJECT_DIR"
+    
+    # Check training speed
+    print_status "Training Speed Analysis:"
+    recent_iterations=$(docker exec zerbinetto-bot grep "Training iteration" /app/training.log 2>/dev/null | tail -10)
+    if [ -n "$recent_iterations" ]; then
+        echo "$recent_iterations"
+        print_status "Recent training iterations logged above"
+    else
+        print_warning "No recent training iterations found"
+    fi
+    
+    # Check loss progression
+    print_status "Loss Progression:"
+    recent_losses=$(docker exec zerbinetto-bot grep "Average Loss" /app/training.log 2>/dev/null | tail -5)
+    if [ -n "$recent_losses" ]; then
+        echo "$recent_losses"
+    else
+        print_warning "No loss data found"
+    fi
+    
+    # Check games played
+    print_status "Games Played:"
+    total_games=$(docker exec zerbinetto-bot grep "Playing game" /app/training.log 2>/dev/null | wc -l)
+    print_success "Total games played: $total_games"
+    
+    # Check model improvements
+    print_status "Model Improvements:"
+    if [ -f "models/chess_model.pkl" ]; then
+        model_size=$(ls -lh models/chess_model.pkl | awk '{print $5}')
+        model_time=$(ls -lh models/chess_model.pkl | awk '{print $6, $7, $8}')
+        print_success "Current model: $model_size (last modified: $model_time)"
     fi
 }
 
@@ -486,6 +525,9 @@ main() {
             ;;
         "disk-usage")
             check_disk_usage
+            ;;
+        "training-performance")
+            check_training_performance
             ;;
         "rollback")
             rollback

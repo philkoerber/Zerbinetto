@@ -341,6 +341,9 @@ python3 scripts/train_model.py --games-per-iteration 100 --iterations 50
 # Check disk usage
 ./scripts/deploy.sh disk-usage
 
+# Check training performance
+./scripts/deploy.sh training-performance
+
 # Cleanup old logs and models
 ./scripts/deploy.sh cleanup
 
