@@ -100,10 +100,10 @@ start_training() {
     
     cd "$PROJECT_DIR"
     
-    # Start training in background
-    nohup python3 -m src.trainer --continuous --iterations 1000 --games-per-iteration 50 > training.log 2>&1 &
+    # Start training in background inside the Docker container with logging
+    docker exec -d zerbinetto-bot bash -c "python -m src.trainer --continuous --iterations 1000 --games-per-iteration 50 > /app/training.log 2>&1"
     
-    print_success "Continuous training started in background"
+    print_success "Continuous training started in background with logging to training.log"
 }
 
 # Function to check application health
@@ -163,6 +163,38 @@ show_deploy_log() {
     tail -f "$LOG_FILE"
 }
 
+# Function to show training log
+show_training_log() {
+    print_status "Showing training log..."
+    cd "$PROJECT_DIR"
+    if [ -f "training.log" ]; then
+        tail -f training.log
+    else
+        print_warning "Training log not found. Training may not be running."
+    fi
+}
+
+# Function to check training status
+check_training_status() {
+    print_status "Checking training status..."
+    cd "$PROJECT_DIR"
+    
+    # Check if training process is running
+    if docker exec zerbinetto-bot ps aux | grep -q "trainer"; then
+        print_success "Training process is running"
+    else
+        print_warning "Training process is not running"
+    fi
+    
+    # Show recent training log entries
+    if [ -f "training.log" ]; then
+        print_status "Recent training log entries:"
+        tail -10 training.log
+    else
+        print_warning "No training log found"
+    fi
+}
+
 # Function to show help
 show_help() {
     echo "Zerbinetto Deployment Script"
@@ -178,6 +210,8 @@ show_help() {
     echo "  status      Show application status"
     echo "  logs        Show application logs"
     echo "  deploy-log  Show deployment log"
+    echo "  training-log Show training log"
+    echo "  training-status Check training status"
     echo "  rollback    Rollback to previous version"
     echo "  help        Show this help message"
     echo ""
@@ -185,6 +219,7 @@ show_help() {
     echo "  $0 deploy   # Full deployment"
     echo "  $0 update   # Update and restart (webhook-triggered)"
     echo "  $0 logs     # View logs"
+    echo "  $0 training-status # Check training progress"
 }
 
 # Main deployment function
@@ -261,6 +296,12 @@ main() {
             ;;
         "deploy-log")
             show_deploy_log
+            ;;
+        "training-log")
+            show_training_log
+            ;;
+        "training-status")
+            check_training_status
             ;;
         "rollback")
             rollback

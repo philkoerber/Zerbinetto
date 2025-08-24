@@ -328,6 +328,12 @@ python3 scripts/train_model.py --games-per-iteration 100 --iterations 50
 
 # View logs
 ./scripts/deploy.sh logs
+
+# Monitor training progress
+./scripts/deploy.sh training-status
+
+# View training logs
+./scripts/deploy.sh training-log
 ```
 
 ## ⚙️ Configuration
@@ -498,10 +504,34 @@ The bot has been tested and shows:
    - Check token permissions
 
 ### Logs
-- **Training logs**: `training.log`
-- **Bot logs**: Console output
-- **Model saves**: `models/chess_model.pkl`
-- **Docker logs**: `docker-compose logs`
+- **Training logs**: `training.log` (real-time training progress)
+- **Bot logs**: Console output (game activity)
+- **Deployment logs**: `deploy.log` (deployment history)
+- **Model saves**: `models/chess_model.pkl` (trained models)
+- **Docker logs**: `docker-compose logs` (container activity)
+
+### Training Monitoring
+
+The bot includes comprehensive training monitoring:
+
+```bash
+# Check if training is running
+./scripts/deploy.sh training-status
+
+# View real-time training progress
+./scripts/deploy.sh training-log
+
+# Monitor training metrics
+tail -f training.log | grep "Loss\|Iteration\|Games"
+```
+
+**Training Log Format:**
+```
+2025-08-24 17:30:15 - trainer - INFO - Starting training iteration 1/1000
+2025-08-24 17:30:20 - trainer - INFO - Generated 50 self-play games
+2025-08-24 17:30:25 - trainer - INFO - Epoch 1/10, Average Loss: 0.234567
+2025-08-24 17:30:30 - trainer - INFO - Model saved to models/chess_model.pkl
+```
 
 ## 🏗️ Architecture
 
@@ -544,7 +574,32 @@ The ML implementation successfully:
 - ✅ **Supports model persistence**: Automatic loading/saving working
 - ✅ **Provides MCTS support**: Wrapper implemented for future expansion
 - ✅ **Integrates with deployment**: Training included in deploy script
+- ✅ **Comprehensive logging**: Real-time training monitoring and progress tracking
+- ✅ **Volume-based model storage**: Models persist across deployments
 - ✅ **Maintains slim structure**: Minimal file additions, clean architecture
+
+## 🔄 Current Status
+
+### ✅ **What's Working:**
+- **ML Engine**: Neural network model loaded and functional
+- **Position Encoding**: 777-feature position representation
+- **Move Selection**: ML-based move evaluation and selection
+- **Model Persistence**: Automatic model loading/saving via Docker volumes
+- **Training Infrastructure**: Self-play training system ready
+- **Deployment Integration**: Training starts automatically with deployment
+- **Logging System**: Comprehensive training and deployment monitoring
+
+### 🚧 **Current Status:**
+- **Bot**: Running with ML engine (waiting for Lichess API to stabilize)
+- **Training**: Ready to start (will begin when deployment succeeds)
+- **Model**: Pre-trained model loaded and functional
+- **Monitoring**: Training logs and status commands available
+
+### 📈 **Next Steps:**
+1. Wait for Lichess API stability
+2. Training will automatically begin with next deployment
+3. Monitor training progress via `./scripts/deploy.sh training-status`
+4. Watch bot strength improve over time
 
 ## 🎉 What Makes Zerbinetto Special
 
